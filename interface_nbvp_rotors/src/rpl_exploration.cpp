@@ -17,6 +17,10 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
+ * TODO Check legal...
+ * Forked by Magnus Selin
+ * Copyright 2018 Magnus Selin, RPL, KTH, Sweden
  */
 
 #include <thread>
