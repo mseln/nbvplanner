@@ -7,7 +7,7 @@ find_package(catkin REQUIRED COMPONENTS
   tf
 )
 
-include_directories(${Eigen_INCLUDE_DIRS} ${catkin_INCLUDE_DIRS})
+include_directories(${Eigen_INCLUDE_DIRS} ${catkin_INCLUDE_DIRS} ../../../devel/include)
 
 catkin_package(
   INCLUDE_DIRS ${Eigen_INCLUDE_DIRS} ${catkin_INCLUDE_DIRS}
@@ -20,3 +20,9 @@ target_link_libraries(exploration
   ${catkin_LIBRARIES}
 )
 add_dependencies(exploration ${catkin_EXPORTED_TARGETS})
+
+add_executable(rpl_exploration src/rpl_exploration.cpp)
+target_link_libraries(rpl_exploration
+  ${catkin_LIBRARIES}
+)
+add_dependencies(rpl_exploration ${catkin_EXPORTED_TARGETS})
