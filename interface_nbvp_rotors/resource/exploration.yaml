@@ -13,7 +13,7 @@ nbvp/gain/occupied: 0.0
 nbvp/gain/unmapped: 1.0
 nbvp/gain/area: 0.0
 nbvp/gain/probabilistic: 0.0
-nbvp/gain/range: 1.5
+nbvp/gain/range: 4
 nbvp/gain/zero: 0.0
 nbvp/gain/degressive_coeff: 0.5
 nbvp/tree/extension_range: 1.0
@@ -27,11 +27,11 @@ nbvp/log/on: true
 
 # bounding box: necessary to limit the simulation 
 # scenario (smaller than actual gazebo scenario)
-bbx/minX: -32.0
-bbx/minY: -32.0
+bbx/minX: -8.0
+bbx/minY: -8.0
 bbx/minZ: -0.0
-bbx/maxX: 32.0
-bbx/maxY: 32.0
+bbx/maxX: 8.0
+bbx/maxY: 8.0
 bbx/maxZ: 3.0
 bbx/softBounds: false
 
