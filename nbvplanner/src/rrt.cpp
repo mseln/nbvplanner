@@ -612,7 +612,7 @@ double nbvInspection::RrtTree::gainRay(StateVec state)
 
   const double disc = manager_->getResolution();
   Eigen::Vector3d origin(state[0], state[1], state[2]);
-  Eigen::Vector3d vec;
+  Eigen::Vector3d vec, dir;
 
   // for(int i = 0; i < n_rays; ++i){ 
   int id=0;
@@ -622,9 +622,8 @@ double nbvInspection::RrtTree::gainRay(StateVec state)
       p = M_PI*pi/180;
       // y = (((double) rand()) / ((double) RAND_MAX) - 0.5) * M_PI*fov_y/180.0 + state[3];
       // p = (((double) rand()) / ((double) RAND_MAX) - 0.5) * M_PI*fov_p/180.0;
-      ROS_ERROR_STREAM(y << " " << state[3]);
-      Eigen::Vector3d dir;
       float r;
+      double g = 0;
       for(r = 0; r < params_.gainRange_; r+=0.1){
         vec[0] = state[0] + r*cos(y)*cos(p);
         vec[1] = state[1] + r*sin(y)*cos(p);
@@ -637,7 +636,7 @@ double nbvInspection::RrtTree::gainRay(StateVec state)
         volumetric_mapping::OctomapManager::CellStatus node = manager_->getCellProbabilityPoint(
             vec, &probability);
         if (node == volumetric_mapping::OctomapManager::CellStatus::kUnknown) {
-          gain += params_.igUnmapped_;
+          g += params_.igUnmapped_;
         }
         else if (node == volumetric_mapping::OctomapManager::CellStatus::kOccupied) {
           // Break if occupied so we don't count any information gain behind a wall.
@@ -645,42 +644,45 @@ double nbvInspection::RrtTree::gainRay(StateVec state)
         }
 
       }
-      
-      visualization_msgs::Marker p;
-      p.header.stamp = ros::Time::now();
-      p.header.seq = id;
-      p.header.frame_id = params_.navigationFrame_;
-      p.id = id; id++;
-      p.ns = "rays";
-      p.type = visualization_msgs::Marker::ARROW;
-      p.action = visualization_msgs::Marker::ADD;
-      p.pose.position.x = state[0];
-      p.pose.position.y = state[1];
-      p.pose.position.z = state[2];
+
+      gain += g; 
+
+      Eigen::Vector3d o(1,0,0);
+      visualization_msgs::Marker a;
+      a.header.stamp = ros::Time::now();
+      a.header.seq = r_ID_;
+      a.header.frame_id = params_.navigationFrame_;
+      a.id = r_ID_; r_ID_++;
+      a.ns = "rays";
+      a.type = visualization_msgs::Marker::ARROW;
+      a.action = visualization_msgs::Marker::ADD;
+      a.pose.position.x = state[0];
+      a.pose.position.y = state[1];
+      a.pose.position.z = state[2];
 
       Eigen::Quaternion<double> q;
-      q.setFromTwoVectors(origin, dir);
+      q.setFromTwoVectors(o, dir);
       q.normalize();
-      p.pose.orientation.x = q.x();
-      p.pose.orientation.y = q.y();
-      p.pose.orientation.z = q.z();
-      p.pose.orientation.w = q.w();
+      a.pose.orientation.x = q.x();
+      a.pose.orientation.y = q.y();
+      a.pose.orientation.z = q.z();
+      a.pose.orientation.w = q.w();
 
-      p.scale.x = r;
-      p.scale.y = 0.01;
-      p.scale.z = 0.01;
-      p.color.r = 255.0;
-      p.color.g = 127.0 / 255.0;
-      p.color.b = 0.0;
-      p.color.a = 1.0;
-      p.lifetime = ros::Duration(10.0);
-      p.frame_locked = false;
-      params_.inspectionPath_.publish(p);
+      a.scale.x = r;
+      a.scale.y = 0.01;
+      a.scale.z = 0.01;
+      a.color.r = g * 8;
+      a.color.g = 127.0 / 255.0;
+      a.color.b = 0.0;
+      a.color.a = 0.3;
+      a.lifetime = ros::Duration(10.0);
+      a.frame_locked = false;
+      params_.inspectionPath_.publish(a);
 
 
     }
   }
-
+  
   // Scale with volume
   gain *= pow(disc, 3.0);
   return gain;
@@ -717,6 +719,8 @@ void nbvInspection::RrtTree::clear()
   counter_ = 0;
   bestGain_ = params_.zero_gain_;
   bestNode_ = NULL;
+
+  r_ID_ = 0;
 
   kd_free(kdTree_);
 }
