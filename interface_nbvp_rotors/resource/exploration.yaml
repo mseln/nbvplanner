@@ -5,7 +5,7 @@ system/camera/horizontal: [90.0]
 system/camera/vertical: [60.0]
 system/bbx/x: 0.8
 system/bbx/y: 0.8
-system/bbx/z: 0.3
+system/bbx/z: 0.6
 system/bbx/overshoot: 0.5
 
 nbvp/gain/free: 0.0
@@ -18,7 +18,7 @@ nbvp/gain/zero: 0.0
 nbvp/gain/degressive_coeff: 0.5
 nbvp/tree/extension_range: 1.0
 nbvp/tree/exact_root: true
-nbvp/tree/initial_iterations: 50
+nbvp/tree/initial_iterations: 20
 nbvp/tree/cuttoff_iterations: 2000
 nbvp/dt: 0.1
 
@@ -31,8 +31,8 @@ bbx/minX: -8.0
 bbx/minY: -24.0
 bbx/minZ: -0.0
 bbx/maxX: 24.0
-bbx/maxY: 8.0
-bbx/maxZ: 3.0
+bbx/maxY: 12.0
+bbx/maxZ: 2.0
 bbx/softBounds: false
 
 pcl_throttle: 0.1
