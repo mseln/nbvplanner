@@ -27,6 +27,7 @@
 #include <nbvplanner/tree.h>
 #include <nbvplanner/mesh_structure.h>
 
+
 #define SQ(x) ((x)*(x))
 #define SQRT2 0.70711
 
@@ -51,7 +52,7 @@ class RrtTree : public TreeBase<Eigen::Vector4d>
   virtual void memorizeBestBranch();
   void publishNode(Node<StateVec> * node);
   double gain(StateVec state);
-  double gainRay(StateVec state);
+  std::pair<double, double> gainRay(StateVec state);
   std::vector<geometry_msgs::Pose> samplePath(StateVec start, StateVec end,
                                               std::string targetFrame);
  protected:

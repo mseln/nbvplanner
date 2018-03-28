@@ -344,17 +344,20 @@ void nbvInspection::RrtTree::iterate(int iterations)
           params_.boundingBox_)
       && !multiagent::isInCollision(newParent->state_, newState, params_.boundingBox_, segments_)) {
     // Sample the new orientation
-    newState[3] = 2.0 * M_PI * (((double) rand()) / ((double) RAND_MAX) - 0.5);
+    // newState[3] = 2.0 * M_PI * (((double) rand()) / ((double) RAND_MAX) - 0.5);
+    std::pair<double, double> ret = gainRay(newState);
+    newState[3] = ret.second; // Set angle to angle with highest information gain
+
     // Create new node and insert into tree
     nbvInspection::Node<StateVec> * newNode = new nbvInspection::Node<StateVec>;
     newNode->state_ = newState;
     newNode->parent_ = newParent;
     newNode->distance_ = newParent->distance_ + direction.norm();
     newParent->children_.push_back(newNode);
-    // newNode->gain_ = newParent->gain_
-    //    + gainRay(newNode->state_) * exp(-params_.degressiveCoeff_ * newNode->distance_);
+    newNode->gain_ = newParent->gain_
+        + ret.first * exp(-params_.degressiveCoeff_ * newNode->distance_);
 
-    newNode->gain_ = gainRay(newNode->state_) * exp(-params_.degressiveCoeff_ * newNode->distance_);
+    // newNode->gain_ = gainRay(newNode->state_) * exp(-params_.degressiveCoeff_ * newNode->distance_);
 
     kd_insert3(kdTree_, newState.x(), newState.y(), newState.z(), newNode);
 
@@ -442,6 +445,10 @@ void nbvInspection::RrtTree::initialize()
             params_.boundingBox_)
         && !multiagent::isInCollision(newParent->state_, newState, params_.boundingBox_,
                                       segments_)) {
+
+      std::pair<double, double> ret = gainRay(newState);
+      newState[3] = ret.second; // Set angle to angle with highest information gain
+
       // Create new node and insert into tree
       nbvInspection::Node<StateVec> * newNode = new nbvInspection::Node<StateVec>;
       newNode->state_ = newState;
@@ -449,7 +456,7 @@ void nbvInspection::RrtTree::initialize()
       newNode->distance_ = newParent->distance_ + direction.norm();
       newParent->children_.push_back(newNode);
       newNode->gain_ = newParent->gain_
-          + gainRay(newNode->state_) * exp(-params_.degressiveCoeff_ * newNode->distance_);
+          + ret.first * exp(-params_.degressiveCoeff_ * newNode->distance_);
 
       kd_insert3(kdTree_, newState.x(), newState.y(), newState.z(), newNode);
 
@@ -600,15 +607,17 @@ double nbvInspection::RrtTree::gain(StateVec state)
   return gain;
 }
 
-double nbvInspection::RrtTree::gainRay(StateVec state)
+std::pair<double, double> nbvInspection::RrtTree::gainRay(StateVec state)
 {
   // This function computes the gain
   // TODO Parameterize
   int n_rays = 1000;
-  double fov_y = 90, fov_p = 60;
+  double fov_y = 56, fov_p = 42;
 
   double gain = 0.0;
   double p, y; // Pitch, yaw
+
+  std::map<int, double> gain_per_yaw;
 
   const double disc = manager_->getResolution();
   Eigen::Vector3d origin(state[0], state[1], state[2]);
@@ -616,10 +625,10 @@ double nbvInspection::RrtTree::gainRay(StateVec state)
 
   // for(int i = 0; i < n_rays; ++i){ 
   int id=0;
-  for(double yi = -45; yi < 45; yi+=10){
-    for(double pi = -30; pi < 30; pi+=10){
-      y = M_PI*yi/180 + state[3];
-      p = M_PI*pi/180;
+  for(int yi = -180; yi < 180; yi+=10){
+    for(int pi = -fov_p/2; pi < fov_p/2; pi+=10){
+      y = M_PI*yi/180.0f;
+      p = M_PI*pi/180.0f;
       // y = (((double) rand()) / ((double) RAND_MAX) - 0.5) * M_PI*fov_y/180.0 + state[3];
       // p = (((double) rand()) / ((double) RAND_MAX) - 0.5) * M_PI*fov_p/180.0;
       float r;
@@ -646,6 +655,7 @@ double nbvInspection::RrtTree::gainRay(StateVec state)
       }
 
       gain += g; 
+      gain_per_yaw[yi] += g;
 
       Eigen::Vector3d o(1,0,0);
       visualization_msgs::Marker a;
@@ -682,10 +692,32 @@ double nbvInspection::RrtTree::gainRay(StateVec state)
 
     }
   }
-  
+
+  int best_yaw = 0;
+  double best_yaw_score = 0;
+  for(int yaw = -180; yaw < 180; yaw++){
+    double yaw_score = 0;
+    for(int fov = -fov_y/2; fov < fov_y/2; fov++){
+      y = yaw+fov;
+      if(y < -180) y+=360;
+      if(y >  180) y-=360;
+      yaw_score += gain_per_yaw[y];
+    }
+
+    if(best_yaw_score < yaw_score){
+      best_yaw_score = yaw_score;
+      best_yaw = yaw;
+    }
+  }
+
+  gain = best_yaw_score; 
   // Scale with volume
   gain *= pow(disc, 3.0);
-  return gain;
+
+  ROS_INFO_STREAM("Gain is " << gain);
+
+  double yaw = M_PI*best_yaw/180.f;
+  return std::make_pair(gain, yaw);
 }
 
 
