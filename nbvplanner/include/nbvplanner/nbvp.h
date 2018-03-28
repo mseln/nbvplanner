@@ -30,6 +30,9 @@
 #include <nbvplanner/tree.hpp>
 #include <nbvplanner/rrt.h>
 
+#include <nbvplanner/nbvpAction.h>  // Note: "Action" is appended
+#include <actionlib/server/simple_action_server.h>
+
 #define SQ(x) ((x)*(x))
 #define SQRT2 0.70711
 
@@ -58,6 +61,10 @@ class nbvPlanner
   mesh::StlMesh * mesh_;
   volumetric_mapping::OctomapManager * manager_;
 
+  actionlib::SimpleActionServer<nbvplanner::nbvpAction> as_;
+  nbvplanner::nbvpFeedback feedback_;
+  nbvplanner::nbvpResult result_;
+
   bool ready_;
 
  public:
@@ -70,6 +77,9 @@ class nbvPlanner
   void posCallback(const geometry_msgs::PoseWithCovarianceStamped& pose);
   void odomCallback(const nav_msgs::Odometry& pose);
   bool plannerCallback(nbvplanner::nbvp_srv::Request& req, nbvplanner::nbvp_srv::Response& res);
+
+  void execute(const nbvplanner::nbvpGoalConstPtr& goal);
+
   void insertPointcloudWithTf(const sensor_msgs::PointCloud2::ConstPtr& pointcloud);
   void insertPointcloudWithTfCamUp(const sensor_msgs::PointCloud2::ConstPtr& pointcloud);
   void insertPointcloudWithTfCamDown(const sensor_msgs::PointCloud2::ConstPtr& pointcloud);

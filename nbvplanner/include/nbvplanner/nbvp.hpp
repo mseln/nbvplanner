@@ -33,7 +33,8 @@ template<typename stateVec>
 nbvInspection::nbvPlanner<stateVec>::nbvPlanner(const ros::NodeHandle& nh,
                                                 const ros::NodeHandle& nh_private)
     : nh_(nh),
-      nh_private_(nh_private)
+      nh_private_(nh_private),
+      as_(nh_, "/nbvp", boost::bind(&nbvPlanner::execute, this, _1), false)
 {
 
   manager_ = new volumetric_mapping::OctomapManager(nh_, nh_private_);
@@ -123,6 +124,9 @@ nbvInspection::nbvPlanner<stateVec>::nbvPlanner(const ros::NodeHandle& nh,
   // Subscribe to topic used for the collaborative collision avoidance (don't hit your peer).
   evadeClient_ = nh_.subscribe("/evasionSegment", 10, &nbvInspection::TreeBase<stateVec>::evade,
                                tree_);
+
+  as_.start();
+
   // Not yet ready. Needs a position message first.
   ready_ = false;
 }
@@ -216,6 +220,66 @@ bool nbvInspection::nbvPlanner<stateVec>::plannerCallback(nbvplanner::nbvp_srv::
   evadePub_.publish(segment);
   ROS_INFO("Path computation lasted %2.3fs", (ros::Time::now() - computationTime).toSec());
   return true;
+}
+
+template<typename stateVec>
+void nbvInspection::nbvPlanner<stateVec>::execute(const nbvplanner::nbvpGoalConstPtr& goal){
+
+  ros::Time computationTime = ros::Time::now();
+  // Check that planner is ready to compute path.
+  if (!ros::ok()) {
+    ROS_INFO_THROTTLE(1, "Exploration finished. Not planning any further moves.");
+    return;
+  }
+
+  if (!ready_) {
+    ROS_ERROR_THROTTLE(1, "Planner not set up: Planner not ready!");
+    return;
+  }
+  if (manager_ == NULL) {
+    ROS_ERROR_THROTTLE(1, "Planner not set up: No octomap available!");
+    return;
+  }
+  if (manager_->getMapSize().norm() <= 0.0) {
+    ROS_ERROR_THROTTLE(1, "Planner not set up: Octomap is empty!");
+    return;
+  }
+  result_.path.clear();
+
+  // Clear old tree and reinitialize.
+  tree_->clear();
+  tree_->initialize();
+  vector_t path;
+  // Iterate the tree construction method.
+  int loopCount = 0;
+  while ((!tree_->gainFound() || tree_->getCounter() < params_.initIterations_) && ros::ok()) {
+    if (tree_->getCounter() > params_.cuttoffIterations_) {
+      ROS_INFO("No gain found, shutting down");
+      ros::shutdown();
+    }
+    if (loopCount > 100000 * (tree_->getCounter() + 1)) {
+      ROS_INFO_THROTTLE(1, "Exceeding maximum failed iterations, return to previous point!");
+      result_.path = tree_->getPathBackToPrevious(goal->header.frame_id);
+    }
+    tree_->iterate(1);
+    loopCount++;
+  }
+  // Extract the best edge.
+  result_.path = tree_->getBestEdge(goal->header.frame_id);
+
+  tree_->memorizeBestBranch();
+  // Publish path to block for other agents (multi agent only).
+  // multiagent_collision_check::Segment segment;
+  // segment.header.stamp = ros::Time::now();
+  // segment.header.frame_id = params_.navigationFrame_;
+  // if (!res.path.empty()) {
+  //  segment.poses.push_back(res.path.front());
+  //   segment.poses.push_back(res.path.back());
+  // }
+  // evadePub_.publish(segment);
+  ROS_INFO("Path computation lasted %2.3fs", (ros::Time::now() - computationTime).toSec());
+
+  as_.setSucceeded(result_);
 }
 
 template<typename stateVec>

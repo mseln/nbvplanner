@@ -633,7 +633,7 @@ std::pair<double, double> nbvInspection::RrtTree::gainRay(StateVec state)
       // p = (((double) rand()) / ((double) RAND_MAX) - 0.5) * M_PI*fov_p/180.0;
       float r;
       double g = 0;
-      for(r = 0; r < params_.gainRange_; r+=0.1){
+      for(r = 0; r < params_.gainRange_; r+=0.2){
         vec[0] = state[0] + r*cos(y)*cos(p);
         vec[1] = state[1] + r*sin(y)*cos(p);
         vec[2] = state[2] + r*sin(p);
