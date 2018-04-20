@@ -53,6 +53,7 @@ class RrtTree : public TreeBase<Eigen::Vector4d>
   void publishNode(Node<StateVec> * node);
   double gain(StateVec state);
   std::pair<double, double> gainRay(StateVec state);
+  std::pair<double, double> gainCubature(StateVec state);
   std::vector<geometry_msgs::Pose> samplePath(StateVec start, StateVec end,
                                               std::string targetFrame);
  protected:

@@ -345,7 +345,7 @@ void nbvInspection::RrtTree::iterate(int iterations)
       && !multiagent::isInCollision(newParent->state_, newState, params_.boundingBox_, segments_)) {
     // Sample the new orientation
     // newState[3] = 2.0 * M_PI * (((double) rand()) / ((double) RAND_MAX) - 0.5);
-    std::pair<double, double> ret = gainRay(newState);
+    std::pair<double, double> ret = gainCubature(newState);
     newState[3] = ret.second; // Set angle to angle with highest information gain
 
     // Create new node and insert into tree
@@ -446,7 +446,7 @@ void nbvInspection::RrtTree::initialize()
         && !multiagent::isInCollision(newParent->state_, newState, params_.boundingBox_,
                                       segments_)) {
 
-      std::pair<double, double> ret = gainRay(newState);
+      std::pair<double, double> ret = gainCubature(newState);
       newState[3] = ret.second; // Set angle to angle with highest information gain
 
       // Create new node and insert into tree
@@ -719,6 +719,115 @@ std::pair<double, double> nbvInspection::RrtTree::gainRay(StateVec state)
   double yaw = M_PI*best_yaw/180.f;
   return std::make_pair(gain, yaw);
 }
+
+std::pair<double, double> nbvInspection::RrtTree::gainCubature(StateVec state)
+{
+  // This function computes the gain
+  // TODO Parameterize
+  int n_rays = 1000;
+  double fov_y = 56, fov_p = 42;
+
+  double dr = 0.2, dphi = 10, dtheta = 10;
+  double dphi_rad = M_PI*dphi/180.0f, dtheta_rad = M_PI*dtheta/180.0f;
+  double r; int phi, theta;
+  double phi_rad, theta_rad;
+
+  double gain = 0.0;
+  std::map<int, double> gain_per_yaw;
+
+  Eigen::Vector3d origin(state[0], state[1], state[2]);
+  Eigen::Vector3d vec, dir;
+
+  int id=0;
+  for(theta = -180; theta < 180; theta += dtheta){
+    theta_rad = M_PI*theta/180.0f;
+    for(phi = 90 - fov_p/2; phi < 90 + fov_p/2; phi += dphi){
+      phi_rad = M_PI*phi/180.0f;
+
+      double g = 0;
+      for(r = 0; r < params_.gainRange_; r+=dr){
+        vec[0] = state[0] + r*cos(theta_rad)*sin(phi_rad);
+        vec[1] = state[1] + r*sin(theta_rad)*sin(phi_rad);
+        vec[2] = state[2] + r*cos(phi_rad);
+        dir = vec - origin;
+
+        // Check cell status and add to the gain.
+        double probability;
+        volumetric_mapping::OctomapManager::CellStatus node = manager_->getCellProbabilityPoint(
+            vec, &probability);
+        if (node == volumetric_mapping::OctomapManager::CellStatus::kUnknown) {
+          g += (2*r*r*dr + 1/6*dr*dr*dr) * dtheta_rad * sin(phi_rad) * sin(dphi_rad/2);
+        }
+        else if (node == volumetric_mapping::OctomapManager::CellStatus::kOccupied) {
+          // Break if occupied so we don't count any information gain behind a wall.
+          break;
+        }
+
+      }
+
+      gain += g; 
+      gain_per_yaw[theta] += g;
+
+      Eigen::Vector3d o(1,0,0);
+      visualization_msgs::Marker a;
+      a.header.stamp = ros::Time::now();
+      a.header.seq = r_ID_;
+      a.header.frame_id = params_.navigationFrame_;
+      a.id = r_ID_; r_ID_++;
+      a.ns = "rays";
+      a.type = visualization_msgs::Marker::ARROW;
+      a.action = visualization_msgs::Marker::ADD;
+      a.pose.position.x = state[0];
+      a.pose.position.y = state[1];
+      a.pose.position.z = state[2];
+
+      Eigen::Quaternion<double> q;
+      q.setFromTwoVectors(o, dir);
+      q.normalize();
+      a.pose.orientation.x = q.x();
+      a.pose.orientation.y = q.y();
+      a.pose.orientation.z = q.z();
+      a.pose.orientation.w = q.w();
+
+      a.scale.x = r;
+      a.scale.y = 0.01;
+      a.scale.z = 0.01;
+      a.color.r = g * 8;
+      a.color.g = 127.0 / 255.0;
+      a.color.b = 0.0;
+      a.color.a = 0.3;
+      a.lifetime = ros::Duration(10.0);
+      a.frame_locked = false;
+      params_.inspectionPath_.publish(a);
+
+
+    }
+  }
+
+  int best_yaw = 0;
+  double best_yaw_score = 0;
+  for(int yaw = -180; yaw < 180; yaw++){
+    double yaw_score = 0;
+    for(int fov = -fov_y/2; fov < fov_y/2; fov++){
+      int theta = yaw+fov;
+      if(theta < -180) theta+=360;
+      if(theta >  180) theta-=360;
+      yaw_score += gain_per_yaw[theta];
+    }
+
+    if(best_yaw_score < yaw_score){
+      best_yaw_score = yaw_score;
+      best_yaw = yaw;
+    }
+  }
+
+  gain = best_yaw_score; 
+  ROS_INFO_STREAM("Gain is " << gain);
+
+  double yaw = M_PI*best_yaw/180.f;
+  return std::make_pair(gain, yaw);
+}
+
 
 
 std::vector<geometry_msgs::Pose> nbvInspection::RrtTree::getPathBackToPrevious(
