@@ -20,6 +20,7 @@
   <build_depend>octomap_world</build_depend>
   <build_depend>kdtree</build_depend>
   <build_depend>multiagent_collision_check</build_depend>
+  <build_depend>pigain</build_depend>
   
   <run_depend>roscpp</run_depend>
   <run_depend>tf</run_depend>
@@ -29,4 +30,5 @@
   <run_depend>octomap_world</run_depend>
   <run_depend>kdtree</run_depend>
   <run_depend>multiagent_collision_check</run_depend>
+  <run_depend>pigain</run_depend>
 </package>

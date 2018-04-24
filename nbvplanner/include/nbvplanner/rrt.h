@@ -28,6 +28,8 @@
 #include <nbvplanner/mesh_structure.h>
 #include <nbvplanner/Node.h>
 
+#include <pigain/Node.h>
+
 
 #define SQ(x) ((x)*(x))
 #define SQRT2 0.70711
@@ -40,7 +42,7 @@ class RrtTree : public TreeBase<Eigen::Vector4d>
   typedef Eigen::Vector4d StateVec;
 
   RrtTree();
-  RrtTree(mesh::StlMesh * mesh, volumetric_mapping::OctomapManager * manager);
+  RrtTree(mesh::StlMesh * mesh, volumetric_mapping::OctomapManager * manager, const ros::NodeHandle& nh);
   ~RrtTree();
   virtual void setStateFromPoseMsg(const geometry_msgs::PoseWithCovarianceStamped& pose);
   virtual void setStateFromOdometryMsg(const nav_msgs::Odometry& pose);
@@ -53,6 +55,7 @@ class RrtTree : public TreeBase<Eigen::Vector4d>
   virtual std::vector<geometry_msgs::Pose> getPathBackToPrevious(std::string targetFrame);
   virtual void memorizeBestBranch();
   void publishNode(Node<StateVec> * node);
+  void publishGain(double gain, Eigen::Vector3d position);
   double gain(StateVec state);
   std::pair<double, double> gainRay(StateVec state);
   std::pair<double, double> gainCubature(StateVec state);
@@ -61,6 +64,7 @@ class RrtTree : public TreeBase<Eigen::Vector4d>
 
   geometry_msgs::Pose stateVecToPose(StateVec stateVec, std::string targetFrame);
  protected:
+  ros::NodeHandle nh_;
   kdtree * kdTree_;
   std::stack<StateVec> history_;
   std::vector<StateVec> bestBranchMemory_;
@@ -72,8 +76,8 @@ class RrtTree : public TreeBase<Eigen::Vector4d>
   std::fstream fileResponse_;
   std::string logFilePath_;
   std::vector<double> inspectionThrottleTime_;
+  ros::Publisher gain_pub_; 
 };
-
 }
 
 #endif

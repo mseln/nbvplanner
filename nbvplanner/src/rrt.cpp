@@ -51,7 +51,9 @@ nbvInspection::RrtTree::RrtTree()
   }
 }
 
-nbvInspection::RrtTree::RrtTree(mesh::StlMesh * mesh, volumetric_mapping::OctomapManager * manager)
+nbvInspection::RrtTree::RrtTree(mesh::StlMesh * mesh, volumetric_mapping::OctomapManager * manager, const ros::NodeHandle& nh) :
+  nh_(nh),
+  gain_pub_(nh_.advertise<pigain::Node>("/gain_node", 1000))
 {
   mesh_ = mesh;
   manager_ = manager;
@@ -856,6 +858,7 @@ std::pair<double, double> nbvInspection::RrtTree::gainCubature(StateVec state)
 
   gain = best_yaw_score; 
   ROS_INFO_STREAM("Gain is " << gain);
+  publishGain(gain, origin);
 
   double yaw = M_PI*best_yaw/180.f;
   return std::make_pair(gain, yaw);
@@ -973,6 +976,15 @@ void nbvInspection::RrtTree::publishNode(Node<StateVec> * node)
     }
     fileTree_ << node->parent_->gain_ << "\n";
   }
+}
+
+void nbvInspection::RrtTree::publishGain(double gain, Eigen::Vector3d position){
+  pigain::Node node;
+  node.gain = gain;
+  node.position.x = position[0];
+  node.position.y = position[1];
+  node.position.z = position[2];
+  gain_pub_.publish(node);
 }
 
 std::vector<geometry_msgs::Pose> nbvInspection::RrtTree::samplePath(StateVec start, StateVec end,

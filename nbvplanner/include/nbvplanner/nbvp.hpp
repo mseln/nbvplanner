@@ -113,7 +113,7 @@ nbvInspection::nbvPlanner<stateVec>::nbvPlanner(const ros::NodeHandle& nh,
     }
   }
   // Initialize the tree instance.
-  tree_ = new RrtTree(mesh_, manager_);
+  tree_ = new RrtTree(mesh_, manager_, nh_);
   tree_->setParams(params_);
   peerPosClient1_ = nh_.subscribe("peer_pose_1", 10,
                                   &nbvInspection::RrtTree::setPeerStateFromPoseMsg1, tree_);

@@ -16,6 +16,7 @@ find_package(catkin REQUIRED COMPONENTS
   genmsg 
   actionlib_msgs 
   actionlib
+  pigain
 )
 find_package(cmake_modules REQUIRED)
 find_package(Eigen REQUIRED)
