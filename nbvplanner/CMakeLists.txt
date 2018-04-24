@@ -20,7 +20,10 @@ find_package(catkin REQUIRED COMPONENTS
 find_package(cmake_modules REQUIRED)
 find_package(Eigen REQUIRED)
 find_package(octomap REQUIRED)
-
+add_message_files(
+  DIRECTORY msg 
+  FILES Node.msg
+)
 add_service_files(
   FILES
   nbvp_srv.srv

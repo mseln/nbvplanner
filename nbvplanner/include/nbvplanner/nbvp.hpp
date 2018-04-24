@@ -248,7 +248,7 @@ void nbvInspection::nbvPlanner<stateVec>::execute(const nbvplanner::nbvpGoalCons
 
   // Clear old tree and reinitialize.
   tree_->clear();
-  tree_->initialize();
+  tree_->initialize(goal->actions_taken);
   vector_t path;
   // Iterate the tree construction method.
   int loopCount = 0;
@@ -258,14 +258,15 @@ void nbvInspection::nbvPlanner<stateVec>::execute(const nbvplanner::nbvpGoalCons
       ros::shutdown();
     }
     if (loopCount > 100000 * (tree_->getCounter() + 1)) {
-      ROS_INFO_THROTTLE(1, "Exceeding maximum failed iterations, return to previous point!");
-      result_.path = tree_->getPathBackToPrevious(goal->header.frame_id);
+      ROS_INFO_THROTTLE(1, "Exceeding maximum failed iterations, shutting down!");
+      ros::shutdown();
+      // result_.path = tree_->getPathBackToPrevious(goal->header.frame_id);
     }
     tree_->iterate(1);
     loopCount++;
   }
   // Extract the best edge.
-  result_.path = tree_->getBestEdge(goal->header.frame_id);
+  result_.path = tree_->getBestBranch(goal->header.frame_id);
 
   tree_->memorizeBestBranch();
   // Publish path to block for other agents (multi agent only).

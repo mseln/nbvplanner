@@ -24,6 +24,7 @@
 #include <octomap_world/octomap_manager.h>
 #include <multiagent_collision_check/Segment.h>
 #include <nbvplanner/mesh_structure.h>
+#include <nbvplanner/Node.h>
 
 namespace nbvInspection {
 
@@ -112,8 +113,9 @@ class TreeBase
   void setPeerStateFromPoseMsg3(const geometry_msgs::PoseWithCovarianceStamped& pose);
   void evade(const multiagent_collision_check::Segment& segmentMsg);
   virtual void iterate(int iterations) = 0;
-  virtual void initialize() = 0;
+  virtual void initialize(int actions_taken = 1) = 0;
   virtual std::vector<geometry_msgs::Pose> getBestEdge(std::string targetFrame) = 0;
+  virtual std::vector<nbvplanner::Node> getBestBranch(std::string targetFrame) = 0;
   virtual void clear() = 0;
   virtual std::vector<geometry_msgs::Pose> getPathBackToPrevious(std::string targetFrame) = 0;
   virtual void memorizeBestBranch() = 0;

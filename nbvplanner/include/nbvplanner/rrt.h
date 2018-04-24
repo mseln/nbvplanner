@@ -26,6 +26,7 @@
 #include <kdtree/kdtree.h>
 #include <nbvplanner/tree.h>
 #include <nbvplanner/mesh_structure.h>
+#include <nbvplanner/Node.h>
 
 
 #define SQ(x) ((x)*(x))
@@ -44,9 +45,10 @@ class RrtTree : public TreeBase<Eigen::Vector4d>
   virtual void setStateFromPoseMsg(const geometry_msgs::PoseWithCovarianceStamped& pose);
   virtual void setStateFromOdometryMsg(const nav_msgs::Odometry& pose);
   virtual void setPeerStateFromPoseMsg(const geometry_msgs::PoseWithCovarianceStamped& pose, int n_peer);
-  virtual void initialize();
+  virtual void initialize(int actions_taken = 1);
   virtual void iterate(int iterations);
   virtual std::vector<geometry_msgs::Pose> getBestEdge(std::string targetFrame);
+  virtual std::vector<nbvplanner::Node> getBestBranch(std::string targetFrame);
   virtual void clear();
   virtual std::vector<geometry_msgs::Pose> getPathBackToPrevious(std::string targetFrame);
   virtual void memorizeBestBranch();
@@ -56,6 +58,8 @@ class RrtTree : public TreeBase<Eigen::Vector4d>
   std::pair<double, double> gainCubature(StateVec state);
   std::vector<geometry_msgs::Pose> samplePath(StateVec start, StateVec end,
                                               std::string targetFrame);
+
+  geometry_msgs::Pose stateVecToPose(StateVec stateVec, std::string targetFrame);
  protected:
   kdtree * kdTree_;
   std::stack<StateVec> history_;
@@ -69,6 +73,7 @@ class RrtTree : public TreeBase<Eigen::Vector4d>
   std::string logFilePath_;
   std::vector<double> inspectionThrottleTime_;
 };
+
 }
 
 #endif

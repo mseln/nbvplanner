@@ -373,7 +373,7 @@ void nbvInspection::RrtTree::iterate(int iterations)
   }
 }
 
-void nbvInspection::RrtTree::initialize()
+void nbvInspection::RrtTree::initialize(int actions_taken)
 {
 // This function is to initialize the tree, including insertion of remainder of previous best branch.
   g_ID_ = 0;
@@ -403,12 +403,20 @@ void nbvInspection::RrtTree::initialize()
   rootNode_->gain_ = params_.zero_gain_;
   rootNode_->parent_ = NULL;
 
+  /*
   if (params_.exact_root_) {
     if (iterationCount_ <= 1) {
       exact_root_ = root_;
     }
     rootNode_->state_ = exact_root_;
   } else {
+    rootNode_->state_ = root_;
+  }*/
+  if (bestBranchMemory_.size()) {
+    exact_root_ = bestBranchMemory_[bestBranchMemory_.size()-actions_taken];
+    rootNode_->state_ = exact_root_;
+  } else {
+    exact_root_ = root_;
     rootNode_->state_ = root_;
   }
   kd_insert3(kdTree_, rootNode_->state_.x(), rootNode_->state_.y(), rootNode_->state_.z(),
@@ -417,9 +425,10 @@ void nbvInspection::RrtTree::initialize()
 
 // Insert all nodes of the remainder of the previous best branch, checking for collisions and
 // recomputing the gain.
-  for (typename std::vector<StateVec>::reverse_iterator iter = bestBranchMemory_.rbegin();
-      iter != bestBranchMemory_.rend(); ++iter) {
-    StateVec newState = *iter;
+  //for (typename std::vector<StateVec>::reverse_iterator iter = bestBranchMemory_.rbegin();
+  //  iter != bestBranchMemory_.rend(); ++iter) {
+  for (int i = bestBranchMemory_.size()-actions_taken-1; i >= 0; --i) {
+    StateVec newState = bestBranchMemory_[i];
     kdres * nearest = kd_nearest3(kdTree_, newState.x(), newState.y(), newState.z());
     if (kd_res_size(nearest) <= 0) {
       kd_res_free(nearest);
@@ -512,6 +521,30 @@ std::vector<geometry_msgs::Pose> nbvInspection::RrtTree::getBestEdge(std::string
       current = current->parent_;
     }
     ret = samplePath(current->parent_->state_, current->state_, targetFrame);
+    history_.push(current->parent_->state_);
+    exact_root_ = current->state_;
+  }
+  return ret;
+}
+
+std::vector<nbvplanner::Node> nbvInspection::RrtTree::getBestBranch(std::string targetFrame)
+{
+// This function returns the best branch
+  std::vector<nbvplanner::Node> ret;
+  nbvInspection::Node<StateVec> * current = bestNode_;
+  if (current->parent_ != NULL) {
+    while (current->parent_ != rootNode_ && current->parent_ != NULL) {
+      nbvplanner::Node node;
+      node.pose = stateVecToPose(current->state_, targetFrame);
+      node.gain = current->gain_;
+      ret.push_back(node);
+      current = current->parent_;
+    }
+    // ret = samplePath(current->parent_->state_, current->state_, targetFrame);
+    nbvplanner::Node node;
+    node.pose = stateVecToPose(current->state_, targetFrame);
+    node.gain = current->gain_;
+    ret.push_back(node);
     history_.push(current->parent_->state_);
     exact_root_ = current->state_;
   }
@@ -846,7 +879,7 @@ void nbvInspection::RrtTree::memorizeBestBranch()
 {
   bestBranchMemory_.clear();
   Node<StateVec> * current = bestNode_;
-  while (current->parent_ && current->parent_->parent_) {
+  while (current->parent_ /* && current->parent_->parent_ */) {
     bestBranchMemory_.push_back(current->state_);
     current = current->parent_;
   }
@@ -991,4 +1024,28 @@ std::vector<geometry_msgs::Pose> nbvInspection::RrtTree::samplePath(StateVec sta
   return ret;
 }
 
+
+geometry_msgs::Pose nbvInspection::RrtTree::stateVecToPose(StateVec stateVec, std::string targetFrame){
+
+  static tf::TransformListener listener;
+  tf::StampedTransform transform;
+  try {
+    listener.lookupTransform(targetFrame, params_.navigationFrame_, ros::Time(0), transform);
+  } catch (tf::TransformException ex) {
+    ROS_ERROR("%s", ex.what());
+    return geometry_msgs::Pose();
+  }
+  tf::Vector3 origin(stateVec[0], stateVec[1], stateVec[2]);
+  double yaw = stateVec[3];
+
+  tf::Quaternion quat;
+  quat.setEuler(0.0, 0.0, yaw);
+  origin = transform * origin;
+  quat = transform * quat;
+  tf::Pose poseTF(quat, origin);
+  geometry_msgs::Pose pose;
+  tf::poseTFToMsg(poseTF, pose);
+
+  return pose;
+}
 #endif

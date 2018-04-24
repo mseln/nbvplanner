@@ -1,7 +1,8 @@
 # Define the goal
 Header header
+int32 actions_taken
 -------
 # Define the result
-geometry_msgs/Pose[] path
+nbvplanner/Node[] path
 -------
 # Define a feedback message
