@@ -34,7 +34,8 @@ nbvInspection::nbvPlanner<stateVec>::nbvPlanner(const ros::NodeHandle& nh,
                                                 const ros::NodeHandle& nh_private)
     : nh_(nh),
       nh_private_(nh_private),
-      as_(nh_, "/nbvp", boost::bind(&nbvPlanner::execute, this, _1), false)
+      as_(nh_, "/nbvp", boost::bind(&nbvPlanner::execute, this, _1), false),
+      position_pub_(nh_.advertise<geometry_msgs::Point>("/position", 1000))
 {
 
   manager_ = new volumetric_mapping::OctomapManager(nh_, nh_private_);
@@ -280,6 +281,7 @@ void nbvInspection::nbvPlanner<stateVec>::execute(const nbvplanner::nbvpGoalCons
   // evadePub_.publish(segment);
   ROS_INFO("Path computation lasted %2.3fs", (ros::Time::now() - computationTime).toSec());
 
+  position_pub_.publish(result_.path[result_.path.size()-1].pose.position);
   as_.setSucceeded(result_);
 }
 

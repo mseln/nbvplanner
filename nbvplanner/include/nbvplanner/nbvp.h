@@ -21,6 +21,7 @@
 #include <fstream>
 #include <eigen3/Eigen/Dense>
 #include <ros/ros.h>
+#include <geometry_msgs/Point.h>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <nav_msgs/Odometry.h>
 #include <octomap_world/octomap_manager.h>
@@ -52,6 +53,7 @@ class nbvPlanner
   ros::Subscriber peerPosClient3_;
   ros::Subscriber evadeClient_;
   ros::Publisher evadePub_;
+  ros::Publisher position_pub_;
   ros::ServiceServer plannerService_;
   ros::Subscriber pointcloud_sub_;
   ros::Subscriber pointcloud_sub_cam_up_;
