@@ -114,14 +114,14 @@ nbvInspection::nbvPlanner<stateVec>::nbvPlanner(const ros::NodeHandle& nh,
     }
   }
   // Initialize the tree instance.
-  tree_ = new RrtTree(mesh_, manager_, nh_);
+  tree_ = new RrtGP(mesh_, manager_, nh_);
   tree_->setParams(params_);
   peerPosClient1_ = nh_.subscribe("peer_pose_1", 10,
-                                  &nbvInspection::RrtTree::setPeerStateFromPoseMsg1, tree_);
+                                  &nbvInspection::RrtGP::setPeerStateFromPoseMsg1, tree_);
   peerPosClient2_ = nh_.subscribe("peer_pose_2", 10,
-                                  &nbvInspection::RrtTree::setPeerStateFromPoseMsg2, tree_);
+                                  &nbvInspection::RrtGP::setPeerStateFromPoseMsg2, tree_);
   peerPosClient3_ = nh_.subscribe("peer_pose_3", 10,
-                                  &nbvInspection::RrtTree::setPeerStateFromPoseMsg3, tree_);
+                                  &nbvInspection::RrtGP::setPeerStateFromPoseMsg3, tree_);
   // Subscribe to topic used for the collaborative collision avoidance (don't hit your peer).
   evadeClient_ = nh_.subscribe("/evasionSegment", 10, &nbvInspection::TreeBase<stateVec>::evade,
                                tree_);

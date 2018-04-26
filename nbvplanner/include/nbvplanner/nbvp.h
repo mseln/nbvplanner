@@ -29,7 +29,7 @@
 #include <nbvplanner/nbvp_srv.h>
 #include <nbvplanner/mesh_structure.h>
 #include <nbvplanner/tree.hpp>
-#include <nbvplanner/rrt.h>
+#include <nbvplanner/rrtgp.h>
 
 #include <nbvplanner/nbvpAction.h>  // Note: "Action" is appended
 #include <actionlib/server/simple_action_server.h>

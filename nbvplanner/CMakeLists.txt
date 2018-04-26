@@ -59,7 +59,7 @@ include_directories(
   ${OCTOMAP_INCLUDE_DIRS}
 )
 
-add_library(nbvplanner src/mesh_structure.cpp src/nbvp.cpp src/rrt.cpp src/tree.cpp)
+add_library(nbvplanner src/mesh_structure.cpp src/nbvp.cpp src/rrt.cpp src/rrtgp.cpp src/tree.cpp)
 target_link_libraries(nbvplanner
   ${catkin_LIBRARIES}
   ${OCTOMAP_LIBRARIES}
@@ -70,7 +70,7 @@ add_dependencies(nbvplanner
   nbvplanner_generate_messages_cpp
 )
 
-add_executable(nbvPlanner src/nbv_planner_node.cpp src/mesh_structure.cpp src/nbvp.cpp src/rrt.cpp src/tree.cpp)
+add_executable(nbvPlanner src/nbv_planner_node.cpp src/mesh_structure.cpp src/nbvp.cpp src/rrt.cpp src/rrtgp.cpp src/tree.cpp)
 target_link_libraries(nbvPlanner
   ${catkin_LIBRARIES}
   ${OCTOMAP_LIBRARIES}
