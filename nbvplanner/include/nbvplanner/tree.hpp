@@ -69,6 +69,13 @@ template<typename stateVec>
 void nbvInspection::TreeBase<stateVec>::setStateFromOdometryMsg(const nav_msgs::Odometry& pose){}
 template<typename stateVec>
 void nbvInspection::TreeBase<stateVec>::setPeerStateFromPoseMsg(const geometry_msgs::PoseWithCovarianceStamped& pose, int n_peer){}
+
+template<typename stateVec>
+std::vector<geometry_msgs::Pose> nbvInspection::TreeBase<stateVec>::getBestEdge(std::string targetFrame){}
+template<typename stateVec>
+std::vector<nbvplanner::Node> nbvInspection::TreeBase<stateVec>::getBestBranch(std::string targetFrame){}
+template<typename stateVec>
+std::vector<geometry_msgs::Pose> nbvInspection::TreeBase<stateVec>::getPathBackToPrevious(std::string targetFrame){}
 template<typename stateVec>
 void nbvInspection::TreeBase<stateVec>::setPeerStateFromPoseMsg1(
     const geometry_msgs::PoseWithCovarianceStamped& pose)

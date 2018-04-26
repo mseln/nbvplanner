@@ -183,8 +183,6 @@ void nbvInspection::RrtGP::iterate(int iterations)
     newNode->gain_ = newParent->gain_
         + ret.first * exp(-params_.degressiveCoeff_ * newNode->distance_);
 
-    // newNode->gain_ = gainRay(newNode->state_) * exp(-params_.degressiveCoeff_ * newNode->distance_);
-
     kd_insert3(kdTree_, newState.x(), newState.y(), newState.z(), newNode);
 
     // Display new node
@@ -203,41 +201,14 @@ void nbvInspection::RrtGP::initialize(int actions_taken)
 {
 // This function is to initialize the tree, including insertion of remainder of previous best branch.
   g_ID_ = 0;
-// Remove last segment from segment list (multi agent only)
-  int i;
-  for (i = 0; i < agentNames_.size(); i++) {
-    if (agentNames_[i].compare(params_.navigationFrame_) == 0) {
-      break;
-    }
-  }
-  if (i < agentNames_.size()) {
-    segments_[i]->clear();
-  }
-// Initialize kd-tree with root node and prepare log file
+// Initialize kd-tree with root node
   kdTree_ = kd_create(3);
-
-  if (params_.log_) {
-    if (fileTree_.is_open()) {
-      fileTree_.close();
-    }
-    fileTree_.open((logFilePath_ + "tree" + std::to_string(iterationCount_) + ".txt").c_str(),
-                   std::ios::out);
-  }
 
   rootNode_ = new Node<StateVec>;
   rootNode_->distance_ = 0.0;
   rootNode_->gain_ = params_.zero_gain_;
   rootNode_->parent_ = NULL;
 
-  /*
-  if (params_.exact_root_) {
-    if (iterationCount_ <= 1) {
-      exact_root_ = root_;
-    }
-    rootNode_->state_ = exact_root_;
-  } else {
-    rootNode_->state_ = root_;
-  }*/
   if (bestBranchMemory_.size()) {
     exact_root_ = bestBranchMemory_[bestBranchMemory_.size()-actions_taken];
     rootNode_->state_ = exact_root_;
@@ -249,10 +220,8 @@ void nbvInspection::RrtGP::initialize(int actions_taken)
              rootNode_);
   iterationCount_++;
 
-// Insert all nodes of the remainder of the previous best branch, checking for collisions and
-// recomputing the gain.
-  //for (typename std::vector<StateVec>::reverse_iterator iter = bestBranchMemory_.rbegin();
-  //  iter != bestBranchMemory_.rend(); ++iter) {
+  // Insert all nodes of the remainder of the previous best branch, checking for collisions and
+  // recomputing the gain.
   for (int i = bestBranchMemory_.size()-actions_taken-1; i >= 0; --i) {
     StateVec newState = bestBranchMemory_[i];
     kdres * nearest = kd_nearest3(kdTree_, newState.x(), newState.y(), newState.z());
@@ -307,7 +276,7 @@ void nbvInspection::RrtGP::initialize(int actions_taken)
     }
   }
 
-// Publish visualization of total exploration area
+  // Publish visualization of total exploration area
   visualization_msgs::Marker p;
   p.header.stamp = ros::Time::now();
   p.header.seq = 0;
@@ -337,22 +306,6 @@ void nbvInspection::RrtGP::initialize(int actions_taken)
   params_.inspectionPath_.publish(p);
 }
 
-std::vector<geometry_msgs::Pose> nbvInspection::RrtGP::getBestEdge(std::string targetFrame)
-{
-// This function returns the first edge of the best branch
-  std::vector<geometry_msgs::Pose> ret;
-  nbvInspection::Node<StateVec> * current = bestNode_;
-  if (current->parent_ != NULL) {
-    while (current->parent_ != rootNode_ && current->parent_ != NULL) {
-      current = current->parent_;
-    }
-    ret = samplePath(current->parent_->state_, current->state_, targetFrame);
-    history_.push(current->parent_->state_);
-    exact_root_ = current->state_;
-  }
-  return ret;
-}
-
 std::vector<nbvplanner::Node> nbvInspection::RrtGP::getBestBranch(std::string targetFrame)
 {
 // This function returns the best branch
@@ -366,7 +319,6 @@ std::vector<nbvplanner::Node> nbvInspection::RrtGP::getBestBranch(std::string ta
       ret.push_back(node);
       current = current->parent_;
     }
-    // ret = samplePath(current->parent_->state_, current->state_, targetFrame);
     nbvplanner::Node node;
     node.pose = stateVecToPose(current->state_, targetFrame);
     node.gain = current->gain_;
@@ -375,199 +327,6 @@ std::vector<nbvplanner::Node> nbvInspection::RrtGP::getBestBranch(std::string ta
     exact_root_ = current->state_;
   }
   return ret;
-}
-
-double nbvInspection::RrtGP::gain(StateVec state)
-{
-// This function computes the gain
-  double gain = 0.0;
-  const double disc = manager_->getResolution();
-  Eigen::Vector3d origin(state[0], state[1], state[2]);
-  Eigen::Vector3d vec;
-  double rangeSq = pow(params_.gainRange_, 2.0);
-// Iterate over all nodes within the allowed distance
-  for (vec[0] = std::max(state[0] - params_.gainRange_, params_.minX_);
-      vec[0] < std::min(state[0] + params_.gainRange_, params_.maxX_); vec[0] += disc) {
-    for (vec[1] = std::max(state[1] - params_.gainRange_, params_.minY_);
-        vec[1] < std::min(state[1] + params_.gainRange_, params_.maxY_); vec[1] += disc) {
-      for (vec[2] = std::max(state[2] - params_.gainRange_, params_.minZ_);
-          vec[2] < std::min(state[2] + params_.gainRange_, params_.maxZ_); vec[2] += disc) {
-        Eigen::Vector3d dir = vec - origin;
-        // Skip if distance is too large
-        if (dir.transpose().dot(dir) > rangeSq) {
-          continue;
-        }
-        bool insideAFieldOfView = false;
-        // Check that voxel center is inside one of the fields of view.
-        for (typename std::vector<std::vector<Eigen::Vector3d>>::iterator itCBN = params_
-            .camBoundNormals_.begin(); itCBN != params_.camBoundNormals_.end(); itCBN++) {
-          bool inThisFieldOfView = true;
-          for (typename std::vector<Eigen::Vector3d>::iterator itSingleCBN = itCBN->begin();
-              itSingleCBN != itCBN->end(); itSingleCBN++) {
-            Eigen::Vector3d normal = Eigen::AngleAxisd(state[3], Eigen::Vector3d::UnitZ())
-                * (*itSingleCBN);
-            double val = dir.dot(normal.normalized());
-            if (val < SQRT2 * disc) {
-              inThisFieldOfView = false;
-              break;
-            }
-          }
-          if (inThisFieldOfView) {
-            insideAFieldOfView = true;
-            break;
-          }
-        }
-        if (!insideAFieldOfView) {
-          continue;
-        }
-        // Check cell status and add to the gain considering the corresponding factor.
-        double probability;
-        volumetric_mapping::OctomapManager::CellStatus node = manager_->getCellProbabilityPoint(
-            vec, &probability);
-        if (node == volumetric_mapping::OctomapManager::CellStatus::kUnknown) {
-          // Rayshooting to evaluate inspectability of cell
-          if (volumetric_mapping::OctomapManager::CellStatus::kOccupied
-              != this->manager_->getVisibility(origin, vec, false)) {
-            gain += params_.igUnmapped_;
-            // TODO: Add probabilistic gain
-            // gain += params_.igProbabilistic_ * PROBABILISTIC_MODEL(probability);
-          }
-        } else if (node == volumetric_mapping::OctomapManager::CellStatus::kOccupied) {
-          // Rayshooting to evaluate inspectability of cell
-          if (volumetric_mapping::OctomapManager::CellStatus::kOccupied
-              != this->manager_->getVisibility(origin, vec, false)) {
-            gain += params_.igOccupied_;
-            // TODO: Add probabilistic gain
-            // gain += params_.igProbabilistic_ * PROBABILISTIC_MODEL(probability);
-          }
-        } else {
-          // Rayshooting to evaluate inspectability of cell
-          if (volumetric_mapping::OctomapManager::CellStatus::kOccupied
-              != this->manager_->getVisibility(origin, vec, false)) {
-            gain += params_.igFree_;
-            // TODO: Add probabilistic gain
-            // gain += params_.igProbabilistic_ * PROBABILISTIC_MODEL(probability);
-          }
-        }
-      }
-    }
-  }
-// Scale with volume
-  gain *= pow(disc, 3.0);
-  return gain;
-}
-
-std::pair<double, double> nbvInspection::RrtGP::gainRay(StateVec state)
-{
-  // This function computes the gain
-  // TODO Parameterize
-  int n_rays = 1000;
-  double fov_y = 56, fov_p = 42;
-
-  double gain = 0.0;
-  double p, y; // Pitch, yaw
-
-  std::map<int, double> gain_per_yaw;
-
-  const double disc = manager_->getResolution();
-  Eigen::Vector3d origin(state[0], state[1], state[2]);
-  Eigen::Vector3d vec, dir;
-
-  // for(int i = 0; i < n_rays; ++i){ 
-  int id=0;
-  for(int yi = -180; yi < 180; yi+=10){
-    for(int pi = -fov_p/2; pi < fov_p/2; pi+=10){
-      y = M_PI*yi/180.0f;
-      p = M_PI*pi/180.0f;
-      // y = (((double) rand()) / ((double) RAND_MAX) - 0.5) * M_PI*fov_y/180.0 + state[3];
-      // p = (((double) rand()) / ((double) RAND_MAX) - 0.5) * M_PI*fov_p/180.0;
-      float r;
-      double g = 0;
-      for(r = 0; r < params_.gainRange_; r+=0.2){
-        vec[0] = state[0] + r*cos(y)*cos(p);
-        vec[1] = state[1] + r*sin(y)*cos(p);
-        vec[2] = state[2] + r*sin(p);
-        dir = vec - origin;
-
-
-        // Check cell status and add to the gain.
-        double probability;
-        volumetric_mapping::OctomapManager::CellStatus node = manager_->getCellProbabilityPoint(
-            vec, &probability);
-        if (node == volumetric_mapping::OctomapManager::CellStatus::kUnknown) {
-          g += params_.igUnmapped_;
-        }
-        else if (node == volumetric_mapping::OctomapManager::CellStatus::kOccupied) {
-          // Break if occupied so we don't count any information gain behind a wall.
-          break;
-        }
-
-      }
-
-      gain += g; 
-      gain_per_yaw[yi] += g;
-
-      Eigen::Vector3d o(1,0,0);
-      visualization_msgs::Marker a;
-      a.header.stamp = ros::Time::now();
-      a.header.seq = r_ID_;
-      a.header.frame_id = params_.navigationFrame_;
-      a.id = r_ID_; r_ID_++;
-      a.ns = "rays";
-      a.type = visualization_msgs::Marker::ARROW;
-      a.action = visualization_msgs::Marker::ADD;
-      a.pose.position.x = state[0];
-      a.pose.position.y = state[1];
-      a.pose.position.z = state[2];
-
-      Eigen::Quaternion<double> q;
-      q.setFromTwoVectors(o, dir);
-      q.normalize();
-      a.pose.orientation.x = q.x();
-      a.pose.orientation.y = q.y();
-      a.pose.orientation.z = q.z();
-      a.pose.orientation.w = q.w();
-
-      a.scale.x = r;
-      a.scale.y = 0.01;
-      a.scale.z = 0.01;
-      a.color.r = g * 8;
-      a.color.g = 127.0 / 255.0;
-      a.color.b = 0.0;
-      a.color.a = 0.3;
-      a.lifetime = ros::Duration(10.0);
-      a.frame_locked = false;
-      params_.inspectionPath_.publish(a);
-
-
-    }
-  }
-
-  int best_yaw = 0;
-  double best_yaw_score = 0;
-  for(int yaw = -180; yaw < 180; yaw++){
-    double yaw_score = 0;
-    for(int fov = -fov_y/2; fov < fov_y/2; fov++){
-      y = yaw+fov;
-      if(y < -180) y+=360;
-      if(y >  180) y-=360;
-      yaw_score += gain_per_yaw[y];
-    }
-
-    if(best_yaw_score < yaw_score){
-      best_yaw_score = yaw_score;
-      best_yaw = yaw;
-    }
-  }
-
-  gain = best_yaw_score; 
-  // Scale with volume
-  gain *= pow(disc, 3.0);
-
-  ROS_INFO_STREAM("Gain is " << gain);
-
-  double yaw = M_PI*best_yaw/180.f;
-  return std::make_pair(gain, yaw);
 }
 
 std::pair<double, double> nbvInspection::RrtGP::gainCubature(StateVec state)
@@ -679,20 +438,6 @@ std::pair<double, double> nbvInspection::RrtGP::gainCubature(StateVec state)
   return std::make_pair(gain, yaw);
 }
 
-
-
-std::vector<geometry_msgs::Pose> nbvInspection::RrtGP::getPathBackToPrevious(
-    std::string targetFrame)
-{
-  std::vector<geometry_msgs::Pose> ret;
-  if (history_.empty()) {
-    return ret;
-  }
-  ret = samplePath(root_, history_.top(), targetFrame);
-  history_.pop();
-  return ret;
-}
-
 void nbvInspection::RrtGP::memorizeBestBranch()
 {
   bestBranchMemory_.clear();
@@ -801,56 +546,6 @@ void nbvInspection::RrtGP::publishGain(double gain, Eigen::Vector3d position){
   node.position.z = position[2];
   gain_pub_.publish(node);
 }
-
-std::vector<geometry_msgs::Pose> nbvInspection::RrtGP::samplePath(StateVec start, StateVec end,
-                                                                    std::string targetFrame)
-{
-  std::vector<geometry_msgs::Pose> ret;
-  static tf::TransformListener listener;
-  tf::StampedTransform transform;
-  try {
-    listener.lookupTransform(targetFrame, params_.navigationFrame_, ros::Time(0), transform);
-  } catch (tf::TransformException ex) {
-    ROS_ERROR("%s", ex.what());
-    return ret;
-  }
-  Eigen::Vector3d distance(end[0] - start[0], end[1] - start[1], end[2] - start[2]);
-  double yaw_direction = end[3] - start[3];
-  if (yaw_direction > M_PI) {
-    yaw_direction -= 2.0 * M_PI;
-  }
-  if (yaw_direction < -M_PI) {
-    yaw_direction += 2.0 * M_PI;
-  }
-  double disc = std::min(params_.dt_ * params_.v_max_ / distance.norm(),
-                         params_.dt_ * params_.dyaw_max_ / abs(yaw_direction));
-  assert(disc > 0.0);
-  for (double it = 0.0; it <= 1.0; it += disc) {
-    tf::Vector3 origin((1.0 - it) * start[0] + it * end[0], (1.0 - it) * start[1] + it * end[1],
-                       (1.0 - it) * start[2] + it * end[2]);
-    double yaw = start[3] + yaw_direction * it;
-    if (yaw > M_PI)
-      yaw -= 2.0 * M_PI;
-    if (yaw < -M_PI)
-      yaw += 2.0 * M_PI;
-    tf::Quaternion quat;
-    quat.setEuler(0.0, 0.0, yaw);
-    origin = transform * origin;
-    quat = transform * quat;
-    tf::Pose poseTF(quat, origin);
-    geometry_msgs::Pose pose;
-    tf::poseTFToMsg(poseTF, pose);
-    ret.push_back(pose);
-    if (params_.log_) {
-      filePath_ << poseTF.getOrigin().x() << ",";
-      filePath_ << poseTF.getOrigin().y() << ",";
-      filePath_ << poseTF.getOrigin().z() << ",";
-      filePath_ << tf::getYaw(poseTF.getRotation()) << "\n";
-    }
-  }
-  return ret;
-}
-
 
 geometry_msgs::Pose nbvInspection::RrtGP::stateVecToPose(StateVec stateVec, std::string targetFrame){
 

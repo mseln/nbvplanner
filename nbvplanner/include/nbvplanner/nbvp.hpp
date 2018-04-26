@@ -116,7 +116,6 @@ void nbvInspection::nbvPlanner<stateVec>::execute(const nbvplanner::nbvpGoalCons
     if (loopCount > 100000 * (tree_->getCounter() + 1)) {
       ROS_INFO_THROTTLE(1, "Exceeding maximum failed iterations, shutting down!");
       ros::shutdown();
-      // result_.path = tree_->getPathBackToPrevious(goal->header.frame_id);
     }
     tree_->iterate(1);
     loopCount++;

@@ -114,10 +114,10 @@ class TreeBase
   void evade(const multiagent_collision_check::Segment& segmentMsg);
   virtual void iterate(int iterations) = 0;
   virtual void initialize(int actions_taken = 1) = 0;
-  virtual std::vector<geometry_msgs::Pose> getBestEdge(std::string targetFrame) = 0;
-  virtual std::vector<nbvplanner::Node> getBestBranch(std::string targetFrame) = 0;
+  virtual std::vector<geometry_msgs::Pose> getBestEdge(std::string targetFrame);
+  virtual std::vector<nbvplanner::Node> getBestBranch(std::string targetFrame);
   virtual void clear() = 0;
-  virtual std::vector<geometry_msgs::Pose> getPathBackToPrevious(std::string targetFrame) = 0;
+  virtual std::vector<geometry_msgs::Pose> getPathBackToPrevious(std::string targetFrame);
   virtual void memorizeBestBranch() = 0;
   void setParams(Params params);
   int getCounter();

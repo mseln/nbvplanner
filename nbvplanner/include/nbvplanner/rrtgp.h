@@ -45,19 +45,12 @@ class RrtGP : public TreeBase<Eigen::Vector4d>
   virtual void setStateFromPoseMsg(const geometry_msgs::PoseWithCovarianceStamped& pose);
   virtual void initialize(int actions_taken = 1);
   virtual void iterate(int iterations);
-  virtual std::vector<geometry_msgs::Pose> getBestEdge(std::string targetFrame);
   virtual std::vector<nbvplanner::Node> getBestBranch(std::string targetFrame);
   virtual void clear();
-  virtual std::vector<geometry_msgs::Pose> getPathBackToPrevious(std::string targetFrame);
   virtual void memorizeBestBranch();
   void publishNode(Node<StateVec> * node);
   void publishGain(double gain, Eigen::Vector3d position);
-  double gain(StateVec state);
-  std::pair<double, double> gainRay(StateVec state);
   std::pair<double, double> gainCubature(StateVec state);
-  std::vector<geometry_msgs::Pose> samplePath(StateVec start, StateVec end,
-                                              std::string targetFrame);
-
   geometry_msgs::Pose stateVecToPose(StateVec stateVec, std::string targetFrame);
  protected:
   ros::NodeHandle nh_;
