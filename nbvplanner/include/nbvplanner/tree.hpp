@@ -64,6 +64,12 @@ nbvInspection::TreeBase<stateVec>::~TreeBase()
 }
 
 template<typename stateVec>
+void nbvInspection::TreeBase<stateVec>::setStateFromPoseMsg(const geometry_msgs::PoseWithCovarianceStamped& pose){}
+template<typename stateVec>
+void nbvInspection::TreeBase<stateVec>::setStateFromOdometryMsg(const nav_msgs::Odometry& pose){}
+template<typename stateVec>
+void nbvInspection::TreeBase<stateVec>::setPeerStateFromPoseMsg(const geometry_msgs::PoseWithCovarianceStamped& pose, int n_peer){}
+template<typename stateVec>
 void nbvInspection::TreeBase<stateVec>::setPeerStateFromPoseMsg1(
     const geometry_msgs::PoseWithCovarianceStamped& pose)
 {

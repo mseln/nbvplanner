@@ -42,90 +42,19 @@ nbvInspection::nbvPlanner<stateVec>::nbvPlanner(const ros::NodeHandle& nh,
 
   // Set up the topics and services
   params_.inspectionPath_ = nh_.advertise<visualization_msgs::Marker>("inspectionPath", 1000);
-  evadePub_ = nh_.advertise<multiagent_collision_check::Segment>("/evasionSegment", 100);
-  plannerService_ = nh_.advertiseService("nbvplanner",
-                                         &nbvInspection::nbvPlanner<stateVec>::plannerCallback,
-                                         this);
   posClient_ = nh_.subscribe("pose", 10, &nbvInspection::nbvPlanner<stateVec>::posCallback, this);
-  odomClient_ = nh_.subscribe("odometry", 10, &nbvInspection::nbvPlanner<stateVec>::odomCallback, this);
 
   pointcloud_sub_ = nh_.subscribe("pointcloud_throttled", 1,
                                   &nbvInspection::nbvPlanner<stateVec>::insertPointcloudWithTf,
                                   this);
-  pointcloud_sub_cam_up_ = nh_.subscribe(
-      "pointcloud_throttled_up", 1,
-      &nbvInspection::nbvPlanner<stateVec>::insertPointcloudWithTfCamUp, this);
-  pointcloud_sub_cam_down_ = nh_.subscribe(
-      "pointcloud_throttled_down", 1,
-      &nbvInspection::nbvPlanner<stateVec>::insertPointcloudWithTfCamDown, this);
 
   if (!setParams()) {
     ROS_ERROR("Could not start the planner. Parameters missing!");
   }
 
-  // Precompute the camera field of view boundaries. The normals of the separating hyperplanes are stored
-  for (int i = 0; i < params_.camPitch_.size(); i++) {
-    double pitch = M_PI * params_.camPitch_[i] / 180.0;
-    double camTop = (pitch - M_PI * params_.camVertical_[i] / 360.0) + M_PI / 2.0;
-    double camBottom = (pitch + M_PI * params_.camVertical_[i] / 360.0) - M_PI / 2.0;
-    double side = M_PI * (params_.camHorizontal_[i]) / 360.0 - M_PI / 2.0;
-    Vector3d bottom(cos(camBottom), 0.0, -sin(camBottom));
-    Vector3d top(cos(camTop), 0.0, -sin(camTop));
-    Vector3d right(cos(side), sin(side), 0.0);
-    Vector3d left(cos(side), -sin(side), 0.0);
-    AngleAxisd m = AngleAxisd(pitch, Vector3d::UnitY());
-    Vector3d rightR = m * right;
-    Vector3d leftR = m * left;
-    rightR.normalize();
-    leftR.normalize();
-    std::vector<Eigen::Vector3d> camBoundNormals;
-    camBoundNormals.push_back(bottom);
-    // ROS_INFO("bottom: (%2.2f, %2.2f, %2.2f)", bottom[0], bottom[1], bottom[2]);
-    camBoundNormals.push_back(top);
-    // ROS_INFO("top: (%2.2f, %2.2f, %2.2f)", top[0], top[1], top[2]);
-    camBoundNormals.push_back(rightR);
-    // ROS_INFO("rightR: (%2.2f, %2.2f, %2.2f)", rightR[0], rightR[1], rightR[2]);
-    camBoundNormals.push_back(leftR);
-    // ROS_INFO("leftR: (%2.2f, %2.2f, %2.2f)", leftR[0], leftR[1], leftR[2]);
-    params_.camBoundNormals_.push_back(camBoundNormals);
-  }
-
-  // Load mesh from STL file if provided.
-  std::string ns = ros::this_node::getName();
-  std::string stlPath = "";
-  mesh_ = NULL;
-  if (ros::param::get(ns + "/stl_file_path", stlPath)) {
-    if (stlPath.length() > 0) {
-      if (ros::param::get(ns + "/mesh_resolution", params_.meshResolution_)) {
-        std::fstream stlFile;
-        stlFile.open(stlPath.c_str());
-        if (stlFile.is_open()) {
-          mesh_ = new mesh::StlMesh(stlFile);
-          mesh_->setResolution(params_.meshResolution_);
-          mesh_->setOctomapManager(manager_);
-          mesh_->setCameraParams(params_.camPitch_, params_.camHorizontal_, params_.camVertical_,
-                                 params_.gainRange_);
-        } else {
-          ROS_WARN("Unable to open STL file");
-        }
-      } else {
-        ROS_WARN("STL mesh file path specified but mesh resolution parameter missing!");
-      }
-    }
-  }
   // Initialize the tree instance.
-  tree_ = new RrtGP(mesh_, manager_, nh_);
+  tree_ = new RrtGP(manager_, nh_);
   tree_->setParams(params_);
-  peerPosClient1_ = nh_.subscribe("peer_pose_1", 10,
-                                  &nbvInspection::RrtGP::setPeerStateFromPoseMsg1, tree_);
-  peerPosClient2_ = nh_.subscribe("peer_pose_2", 10,
-                                  &nbvInspection::RrtGP::setPeerStateFromPoseMsg2, tree_);
-  peerPosClient3_ = nh_.subscribe("peer_pose_3", 10,
-                                  &nbvInspection::RrtGP::setPeerStateFromPoseMsg3, tree_);
-  // Subscribe to topic used for the collaborative collision avoidance (don't hit your peer).
-  evadeClient_ = nh_.subscribe("/evasionSegment", 10, &nbvInspection::TreeBase<stateVec>::evade,
-                               tree_);
-
   as_.start();
 
   // Not yet ready. Needs a position message first.
@@ -138,9 +67,6 @@ nbvInspection::nbvPlanner<stateVec>::~nbvPlanner()
   if (manager_) {
     delete manager_;
   }
-  if (mesh_) {
-    delete mesh_;
-  }
 }
 
 template<typename stateVec>
@@ -150,77 +76,6 @@ void nbvInspection::nbvPlanner<stateVec>::posCallback(
   tree_->setStateFromPoseMsg(pose);
   // Planner is now ready to plan.
   ready_ = true;
-}
-
-template<typename stateVec>
-void nbvInspection::nbvPlanner<stateVec>::odomCallback(
-    const nav_msgs::Odometry& pose)
-{
-  tree_->setStateFromOdometryMsg(pose);
-  // Planner is now ready to plan.
-  ready_ = true;
-}
-
-template<typename stateVec>
-bool nbvInspection::nbvPlanner<stateVec>::plannerCallback(nbvplanner::nbvp_srv::Request& req,
-                                                          nbvplanner::nbvp_srv::Response& res)
-{
-  ros::Time computationTime = ros::Time::now();
-  // Check that planner is ready to compute path.
-  if (!ros::ok()) {
-    ROS_INFO_THROTTLE(1, "Exploration finished. Not planning any further moves.");
-    return true;
-  }
-
-  if (!ready_) {
-    ROS_ERROR_THROTTLE(1, "Planner not set up: Planner not ready!");
-    return true;
-  }
-  if (manager_ == NULL) {
-    ROS_ERROR_THROTTLE(1, "Planner not set up: No octomap available!");
-    return true;
-  }
-  if (manager_->getMapSize().norm() <= 0.0) {
-    ROS_ERROR_THROTTLE(1, "Planner not set up: Octomap is empty!");
-    return true;
-  }
-  res.path.clear();
-
-  // Clear old tree and reinitialize.
-  tree_->clear();
-  tree_->initialize();
-  vector_t path;
-  // Iterate the tree construction method.
-  int loopCount = 0;
-  while ((!tree_->gainFound() || tree_->getCounter() < params_.initIterations_) && ros::ok()) {
-    if (tree_->getCounter() > params_.cuttoffIterations_) {
-      ROS_INFO("No gain found, shutting down");
-      ros::shutdown();
-      return true;
-    }
-    if (loopCount > 100000 * (tree_->getCounter() + 1)) {
-      ROS_INFO_THROTTLE(1, "Exceeding maximum failed iterations, return to previous point!");
-      res.path = tree_->getPathBackToPrevious(req.header.frame_id);
-      return true;
-    }
-    tree_->iterate(1);
-    loopCount++;
-  }
-  // Extract the best edge.
-  res.path = tree_->getBestEdge(req.header.frame_id);
-
-  tree_->memorizeBestBranch();
-  // Publish path to block for other agents (multi agent only).
-  multiagent_collision_check::Segment segment;
-  segment.header.stamp = ros::Time::now();
-  segment.header.frame_id = params_.navigationFrame_;
-  if (!res.path.empty()) {
-    segment.poses.push_back(res.path.front());
-    segment.poses.push_back(res.path.back());
-  }
-  evadePub_.publish(segment);
-  ROS_INFO("Path computation lasted %2.3fs", (ros::Time::now() - computationTime).toSec());
-  return true;
 }
 
 template<typename stateVec>
@@ -270,15 +125,6 @@ void nbvInspection::nbvPlanner<stateVec>::execute(const nbvplanner::nbvpGoalCons
   result_.path = tree_->getBestBranch(goal->header.frame_id);
 
   tree_->memorizeBestBranch();
-  // Publish path to block for other agents (multi agent only).
-  // multiagent_collision_check::Segment segment;
-  // segment.header.stamp = ros::Time::now();
-  // segment.header.frame_id = params_.navigationFrame_;
-  // if (!res.path.empty()) {
-  //  segment.poses.push_back(res.path.front());
-  //   segment.poses.push_back(res.path.back());
-  // }
-  // evadePub_.publish(segment);
   ROS_INFO("Path computation lasted %2.3fs", (ros::Time::now() - computationTime).toSec());
 
   position_pub_.publish(result_.path[result_.path.size()-1].pose.position);
@@ -480,35 +326,6 @@ void nbvInspection::nbvPlanner<stateVec>::insertPointcloudWithTf(
     tree_->insertPointcloudWithTf(pointcloud);
     last += params_.pcl_throttle_;
   }
-}
-
-template<typename stateVec>
-void nbvInspection::nbvPlanner<stateVec>::insertPointcloudWithTfCamUp(
-    const sensor_msgs::PointCloud2::ConstPtr& pointcloud)
-{
-  static double last = ros::Time::now().toSec();
-  if (last + params_.pcl_throttle_ < ros::Time::now().toSec()) {
-    tree_->insertPointcloudWithTf(pointcloud);
-    last += params_.pcl_throttle_;
-  }
-}
-
-template<typename stateVec>
-void nbvInspection::nbvPlanner<stateVec>::insertPointcloudWithTfCamDown(
-    const sensor_msgs::PointCloud2::ConstPtr& pointcloud)
-{
-  static double last = ros::Time::now().toSec();
-  if (last + params_.pcl_throttle_ < ros::Time::now().toSec()) {
-    tree_->insertPointcloudWithTf(pointcloud);
-    last += params_.pcl_throttle_;
-  }
-}
-
-template<typename stateVec>
-void nbvInspection::nbvPlanner<stateVec>::evasionCallback(
-    const multiagent_collision_check::Segment& segmentMsg)
-{
-  tree_->evade(segmentMsg);
 }
 
 #endif // NBVP_HPP_

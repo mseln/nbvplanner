@@ -22,40 +22,10 @@
 #include <nbvplanner/rrtgp.h>
 #include <nbvplanner/tree.hpp>
 
-nbvInspection::RrtGP::RrtGP()
-    : nbvInspection::TreeBase<StateVec>::TreeBase()
-{
-  kdTree_ = kd_create(3);
-  iterationCount_ = 0;
-  for (int i = 0; i < 4; i++) {
-    inspectionThrottleTime_.push_back(ros::Time::now().toSec());
-  }
-
-  // If logging is required, set up files here
-  bool ifLog = false;
-  std::string ns = ros::this_node::getName();
-  ros::param::get(ns + "/nbvp/log/on", ifLog);
-  if (ifLog) {
-    time_t rawtime;
-    struct tm * ptm;
-    time(&rawtime);
-    ptm = gmtime(&rawtime);
-    logFilePath_ = ros::package::getPath("nbvplanner") + "/data/"
-        + std::to_string(ptm->tm_year + 1900) + "_" + std::to_string(ptm->tm_mon + 1) + "_"
-        + std::to_string(ptm->tm_mday) + "_" + std::to_string(ptm->tm_hour) + "_"
-        + std::to_string(ptm->tm_min) + "_" + std::to_string(ptm->tm_sec);
-    system(("mkdir -p " + logFilePath_).c_str());
-    logFilePath_ += "/";
-    fileResponse_.open((logFilePath_ + "response.txt").c_str(), std::ios::out);
-    filePath_.open((logFilePath_ + "path.txt").c_str(), std::ios::out);
-  }
-}
-
-nbvInspection::RrtGP::RrtGP(mesh::StlMesh * mesh, volumetric_mapping::OctomapManager * manager, const ros::NodeHandle& nh) :
+nbvInspection::RrtGP::RrtGP(volumetric_mapping::OctomapManager * manager, const ros::NodeHandle& nh) :
   nh_(nh),
   gain_pub_(nh_.advertise<pigain::Node>("/gain_node", 1000))
 {
-  mesh_ = mesh;
   manager_ = manager;
   kdTree_ = kd_create(3);
   iterationCount_ = 0;
@@ -131,152 +101,6 @@ void nbvInspection::RrtGP::setStateFromPoseMsg(
         fileResponse_ << root_[i] << ",";
       }
       fileResponse_ << root_[root_.size() - 1] << "\n";
-    }
-  }
-  // Update the inspected parts of the mesh using the current position
-  if (ros::Time::now().toSec() - inspectionThrottleTime_[0] > params_.inspection_throttle_) {
-    inspectionThrottleTime_[0] += params_.inspection_throttle_;
-    if (mesh_) {
-      geometry_msgs::Pose poseTransformed;
-      tf::poseTFToMsg(transform * poseTF, poseTransformed);
-      mesh_->setPeerPose(poseTransformed, 0);
-      mesh_->incorporateViewFromPoseMsg(poseTransformed, 0);
-      // Publish the mesh marker for visualization in rviz
-      visualization_msgs::Marker inspected;
-      inspected.ns = "meshInspected";
-      inspected.id = 0;
-      inspected.header.seq = inspected.id;
-      inspected.header.stamp = pose.header.stamp;
-      inspected.header.frame_id = params_.navigationFrame_;
-      inspected.type = visualization_msgs::Marker::TRIANGLE_LIST;
-      inspected.lifetime = ros::Duration(10);
-      inspected.action = visualization_msgs::Marker::ADD;
-      inspected.pose.position.x = 0.0;
-      inspected.pose.position.y = 0.0;
-      inspected.pose.position.z = 0.0;
-      inspected.pose.orientation.x = 0.0;
-      inspected.pose.orientation.y = 0.0;
-      inspected.pose.orientation.z = 0.0;
-      inspected.pose.orientation.w = 1.0;
-      inspected.scale.x = 1.0;
-      inspected.scale.y = 1.0;
-      inspected.scale.z = 1.0;
-      visualization_msgs::Marker uninspected = inspected;
-      uninspected.header.seq++;
-      uninspected.id++;
-      uninspected.ns = "meshUninspected";
-      mesh_->assembleMarkerArray(inspected, uninspected);
-      if (inspected.points.size() > 0) {
-        params_.inspectionPath_.publish(inspected);
-      }
-      if (uninspected.points.size() > 0) {
-        params_.inspectionPath_.publish(uninspected);
-      }
-    }
-  }
-}
-
-void nbvInspection::RrtGP::setStateFromOdometryMsg(
-    const nav_msgs::Odometry& pose)
-{
-  // Get latest transform to the planning frame and transform the pose
-  static tf::TransformListener listener;
-  tf::StampedTransform transform;
-  try {
-    listener.lookupTransform(params_.navigationFrame_, pose.header.frame_id, pose.header.stamp,
-                             transform);
-  } catch (tf::TransformException ex) {
-    ROS_ERROR("%s", ex.what());
-    return;
-  }
-  tf::Pose poseTF;
-  tf::poseMsgToTF(pose.pose.pose, poseTF);
-  tf::Vector3 position = poseTF.getOrigin();
-  position = transform * position;
-  tf::Quaternion quat = poseTF.getRotation();
-  quat = transform * quat;
-  root_[0] = position.x();
-  root_[1] = position.y();
-  root_[2] = position.z();
-  root_[3] = tf::getYaw(quat);
-
-  // Log the vehicle response in the planning frame
-  static double logThrottleTime = ros::Time::now().toSec();
-  if (ros::Time::now().toSec() - logThrottleTime > params_.log_throttle_) {
-    logThrottleTime += params_.log_throttle_;
-    if (params_.log_) {
-      for (int i = 0; i < root_.size() - 1; i++) {
-        fileResponse_ << root_[i] << ",";
-      }
-      fileResponse_ << root_[root_.size() - 1] << "\n";
-    }
-  }
-  // Update the inspected parts of the mesh using the current position
-  if (ros::Time::now().toSec() - inspectionThrottleTime_[0] > params_.inspection_throttle_) {
-    inspectionThrottleTime_[0] += params_.inspection_throttle_;
-    if (mesh_) {
-      geometry_msgs::Pose poseTransformed;
-      tf::poseTFToMsg(transform * poseTF, poseTransformed);
-      mesh_->setPeerPose(poseTransformed, 0);
-      mesh_->incorporateViewFromPoseMsg(poseTransformed, 0);
-      // Publish the mesh marker for visualization in rviz
-      visualization_msgs::Marker inspected;
-      inspected.ns = "meshInspected";
-      inspected.id = 0;
-      inspected.header.seq = inspected.id;
-      inspected.header.stamp = pose.header.stamp;
-      inspected.header.frame_id = params_.navigationFrame_;
-      inspected.type = visualization_msgs::Marker::TRIANGLE_LIST;
-      inspected.lifetime = ros::Duration(10);
-      inspected.action = visualization_msgs::Marker::ADD;
-      inspected.pose.position.x = 0.0;
-      inspected.pose.position.y = 0.0;
-      inspected.pose.position.z = 0.0;
-      inspected.pose.orientation.x = 0.0;
-      inspected.pose.orientation.y = 0.0;
-      inspected.pose.orientation.z = 0.0;
-      inspected.pose.orientation.w = 1.0;
-      inspected.scale.x = 1.0;
-      inspected.scale.y = 1.0;
-      inspected.scale.z = 1.0;
-      visualization_msgs::Marker uninspected = inspected;
-      uninspected.header.seq++;
-      uninspected.id++;
-      uninspected.ns = "meshUninspected";
-      mesh_->assembleMarkerArray(inspected, uninspected);
-      if (inspected.points.size() > 0) {
-        params_.inspectionPath_.publish(inspected);
-      }
-      if (uninspected.points.size() > 0) {
-        params_.inspectionPath_.publish(uninspected);
-      }
-    }
-  }
-}
-
-void nbvInspection::RrtGP::setPeerStateFromPoseMsg(
-    const geometry_msgs::PoseWithCovarianceStamped& pose, int n_peer)
-{
-  // Get latest transform to the planning frame and transform the pose
-  static tf::TransformListener listener;
-  tf::StampedTransform transform;
-  try {
-    listener.lookupTransform(params_.navigationFrame_, pose.header.frame_id, pose.header.stamp,
-                             transform);
-  } catch (tf::TransformException ex) {
-    ROS_ERROR("%s", ex.what());
-    return;
-  }
-  tf::Pose poseTF;
-  tf::poseMsgToTF(pose.pose.pose, poseTF);
-  geometry_msgs::Pose poseTransformed;
-  tf::poseTFToMsg(transform * poseTF, poseTransformed);
-  // Update the inspected parts of the mesh using the current position
-  if (ros::Time::now().toSec() - inspectionThrottleTime_[n_peer] > params_.inspection_throttle_) {
-    inspectionThrottleTime_[n_peer] += params_.inspection_throttle_;
-    if (mesh_) {
-      mesh_->setPeerPose(poseTransformed, n_peer);
-      mesh_->incorporateViewFromPoseMsg(poseTransformed, n_peer);
     }
   }
 }
@@ -630,15 +454,6 @@ double nbvInspection::RrtGP::gain(StateVec state)
   }
 // Scale with volume
   gain *= pow(disc, 3.0);
-// Check the gain added by inspectable surface
-  if (mesh_) {
-    tf::Transform transform;
-    transform.setOrigin(tf::Vector3(state.x(), state.y(), state.z()));
-    tf::Quaternion quaternion;
-    quaternion.setEuler(0.0, 0.0, state[3]);
-    transform.setRotation(quaternion);
-    gain += params_.igArea_ * mesh_->computeInspectableArea(transform);
-  }
   return gain;
 }
 

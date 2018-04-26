@@ -47,20 +47,10 @@ class nbvPlanner
   ros::NodeHandle nh_private_;
 
   ros::Subscriber posClient_;
-  ros::Subscriber odomClient_;
-  ros::Subscriber peerPosClient1_;
-  ros::Subscriber peerPosClient2_;
-  ros::Subscriber peerPosClient3_;
-  ros::Subscriber evadeClient_;
-  ros::Publisher evadePub_;
-  ros::Publisher position_pub_;
-  ros::ServiceServer plannerService_;
+  ros::Publisher  position_pub_;
   ros::Subscriber pointcloud_sub_;
-  ros::Subscriber pointcloud_sub_cam_up_;
-  ros::Subscriber pointcloud_sub_cam_down_;
 
   Params params_;
-  mesh::StlMesh * mesh_;
   volumetric_mapping::OctomapManager * manager_;
 
   actionlib::SimpleActionServer<nbvplanner::nbvpAction> as_;
@@ -77,15 +67,8 @@ class nbvPlanner
   ~nbvPlanner();
   bool setParams();
   void posCallback(const geometry_msgs::PoseWithCovarianceStamped& pose);
-  void odomCallback(const nav_msgs::Odometry& pose);
-  bool plannerCallback(nbvplanner::nbvp_srv::Request& req, nbvplanner::nbvp_srv::Response& res);
-
   void execute(const nbvplanner::nbvpGoalConstPtr& goal);
-
   void insertPointcloudWithTf(const sensor_msgs::PointCloud2::ConstPtr& pointcloud);
-  void insertPointcloudWithTfCamUp(const sensor_msgs::PointCloud2::ConstPtr& pointcloud);
-  void insertPointcloudWithTfCamDown(const sensor_msgs::PointCloud2::ConstPtr& pointcloud);
-  void evasionCallback(const multiagent_collision_check::Segment& segmentMsg);
 };
 }
 

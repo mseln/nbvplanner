@@ -25,7 +25,6 @@
 #include <nav_msgs/Odometry.h>
 #include <kdtree/kdtree.h>
 #include <nbvplanner/tree.h>
-#include <nbvplanner/mesh_structure.h>
 #include <nbvplanner/Node.h>
 
 #include <pigain/Node.h>
@@ -41,12 +40,9 @@ class RrtGP : public TreeBase<Eigen::Vector4d>
  public:
   typedef Eigen::Vector4d StateVec;
 
-  RrtGP();
-  RrtGP(mesh::StlMesh * mesh, volumetric_mapping::OctomapManager * manager, const ros::NodeHandle& nh);
+  RrtGP(volumetric_mapping::OctomapManager * manager, const ros::NodeHandle& nh);
   ~RrtGP();
   virtual void setStateFromPoseMsg(const geometry_msgs::PoseWithCovarianceStamped& pose);
-  virtual void setStateFromOdometryMsg(const nav_msgs::Odometry& pose);
-  virtual void setPeerStateFromPoseMsg(const geometry_msgs::PoseWithCovarianceStamped& pose, int n_peer);
   virtual void initialize(int actions_taken = 1);
   virtual void iterate(int iterations);
   virtual std::vector<geometry_msgs::Pose> getBestEdge(std::string targetFrame);
