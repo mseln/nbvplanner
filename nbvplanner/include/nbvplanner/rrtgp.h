@@ -28,6 +28,7 @@
 #include <nbvplanner/Node.h>
 
 #include <pigain/Node.h>
+#include <pigain/Query.h>
 
 
 #define SQ(x) ((x)*(x))
@@ -66,6 +67,7 @@ class RrtGP : public TreeBase<Eigen::Vector4d>
   std::string logFilePath_;
   std::vector<double> inspectionThrottleTime_;
   ros::Publisher gain_pub_; 
+  ros::ServiceClient gp_query_client_;
 };
 }
 

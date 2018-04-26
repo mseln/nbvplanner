@@ -24,7 +24,8 @@
 
 nbvInspection::RrtGP::RrtGP(volumetric_mapping::OctomapManager * manager, const ros::NodeHandle& nh) :
   nh_(nh),
-  gain_pub_(nh_.advertise<pigain::Node>("/gain_node", 1000))
+  gain_pub_(nh_.advertise<pigain::Node>("/gain_node", 1000)),
+  gp_query_client_(nh_.serviceClient<pigain::Query>("/gp_query_server"))
 {
   manager_ = manager;
   kdTree_ = kd_create(3);
@@ -37,20 +38,7 @@ nbvInspection::RrtGP::RrtGP(volumetric_mapping::OctomapManager * manager, const 
   bool ifLog = false;
   std::string ns = ros::this_node::getName();
   ros::param::get(ns + "/nbvp/log/on", ifLog);
-  if (ifLog) {
-    time_t rawtime;
-    struct tm * ptm;
-    time(&rawtime);
-    ptm = gmtime(&rawtime);
-    logFilePath_ = ros::package::getPath("nbvplanner") + "/data/"
-        + std::to_string(ptm->tm_year + 1900) + "_" + std::to_string(ptm->tm_mon + 1) + "_"
-        + std::to_string(ptm->tm_mday) + "_" + std::to_string(ptm->tm_hour) + "_"
-        + std::to_string(ptm->tm_min) + "_" + std::to_string(ptm->tm_sec);
-    system(("mkdir -p " + logFilePath_).c_str());
-    logFilePath_ += "/";
-    fileResponse_.open((logFilePath_ + "response.txt").c_str(), std::ios::out);
-    filePath_.open((logFilePath_ + "path.txt").c_str(), std::ios::out);
-  }
+  
 }
 
 nbvInspection::RrtGP::~RrtGP()
@@ -331,6 +319,29 @@ std::vector<nbvplanner::Node> nbvInspection::RrtGP::getBestBranch(std::string ta
 
 std::pair<double, double> nbvInspection::RrtGP::gainCubature(StateVec state)
 {
+  double gain = 0.0;
+
+  pigain::Query srv;
+  srv.request.point.x = state[0];
+  srv.request.point.y = state[1];
+  srv.request.point.z = state[2];
+
+  ROS_INFO_STREAM("Calling gp_query_service");
+  if (gp_query_client_.call(srv)) {
+    ROS_INFO_STREAM("mu = " << srv.response.mu << " sigma = " << srv.response.sigma);
+    if(srv.response.sigma < 0.2){
+      gain = srv.response.mu;
+      double yaw = 0;
+      return std::make_pair(gain, yaw);
+    }
+    else{
+      ROS_WARN_STREAM("Sigma too high, calculating gain explicitly");
+    }
+  }
+  else {
+    ROS_ERROR("Failed to call gp_query_service");
+  }
+
   // This function computes the gain
   // TODO Parameterize
   int n_rays = 1000;
@@ -341,7 +352,6 @@ std::pair<double, double> nbvInspection::RrtGP::gainCubature(StateVec state)
   double r; int phi, theta;
   double phi_rad, theta_rad;
 
-  double gain = 0.0;
   std::map<int, double> gain_per_yaw;
 
   Eigen::Vector3d origin(state[0], state[1], state[2]);
