@@ -95,6 +95,8 @@ void nbvInspection::RrtGP::setStateFromPoseMsg(
 
 void nbvInspection::RrtGP::iterate(int iterations)
 {
+  ros::Time start_time = ros::Time::now();
+  ROS_INFO_STREAM("Starting iterate: " << ros::Time::now() - start_time);
 // In this function a new configuration is sampled and added to the tree.
   StateVec newState;
 
@@ -105,6 +107,8 @@ void nbvInspection::RrtGP::iterate(int iterations)
   double radius = sqrt(
       SQ(params_.minX_ - params_.maxX_) + SQ(params_.minY_ - params_.maxY_)
       + SQ(params_.minZ_ - params_.maxZ_));
+
+  ROS_INFO_STREAM("Sampling point... " << ros::Time::now() - start_time);
   bool solutionFound = false;
   while (!solutionFound) {
     for (int i = 0; i < 3; i++) {
@@ -131,6 +135,8 @@ void nbvInspection::RrtGP::iterate(int iterations)
     }
     solutionFound = true;
   }
+  ROS_INFO_STREAM("Found point... " << ros::Time::now() - start_time);
+  ROS_INFO_STREAM("Finding neighbour... " << ros::Time::now() - start_time);
 
 // Find nearest neighbour
   kdres * nearest = kd_nearest3(kdTree_, newState.x(), newState.y(), newState.z());
@@ -141,6 +147,9 @@ void nbvInspection::RrtGP::iterate(int iterations)
   nbvInspection::Node<StateVec> * newParent = (nbvInspection::Node<StateVec> *) kd_res_item_data(
       nearest);
   kd_res_free(nearest);
+
+  ROS_INFO_STREAM("Found neighbour... " << ros::Time::now() - start_time);
+  ROS_INFO_STREAM("Collision checking... " << ros::Time::now() - start_time);
 
 // Check for collision of new connection plus some overshoot distance.
   Eigen::Vector3d origin(newParent->state_[0], newParent->state_[1], newParent->state_[2]);
@@ -157,6 +166,9 @@ void nbvInspection::RrtGP::iterate(int iterations)
           origin, direction + origin + direction.normalized() * params_.dOvershoot_,
           params_.boundingBox_)
       && !multiagent::isInCollision(newParent->state_, newState, params_.boundingBox_, segments_)) {
+
+    ROS_INFO_STREAM("Collision check ok... " << ros::Time::now() - start_time);
+    ROS_INFO_STREAM("Calculating gain... " << ros::Time::now() - start_time);
     // Sample the new orientation
     // newState[3] = 2.0 * M_PI * (((double) rand()) / ((double) RAND_MAX) - 0.5);
     std::pair<double, double> ret = gainCubature(newState);
@@ -173,6 +185,8 @@ void nbvInspection::RrtGP::iterate(int iterations)
 
     kd_insert3(kdTree_, newState.x(), newState.y(), newState.z(), newNode);
 
+    ROS_INFO_STREAM("Calculated gain... " << ros::Time::now() - start_time);
+
     // Display new node
     publishNode(newNode);
 
@@ -183,6 +197,10 @@ void nbvInspection::RrtGP::iterate(int iterations)
     }
     counter_++;
   }
+  else {
+    ROS_INFO_STREAM("Collision check fail... " << ros::Time::now() - start_time);
+  }
+  ROS_INFO_STREAM("Done! " << ros::Time::now() - start_time);
 }
 
 void nbvInspection::RrtGP::initialize(int actions_taken)
