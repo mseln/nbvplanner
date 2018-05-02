@@ -22,38 +22,21 @@
 #include <nbvplanner/rrtgp.h>
 #include <nbvplanner/tree.hpp>
 
-nbvInspection::RrtGP::RrtGP(volumetric_mapping::OctomapManager * manager, const ros::NodeHandle& nh) :
+nbvInspection::RrtGP::RrtGP(const ros::NodeHandle& nh) :
   nh_(nh),
   gain_pub_(nh_.advertise<pigain::Node>("/gain_node", 1000)),
-  gp_query_client_(nh_.serviceClient<pigain::Query>("/gp_query_server"))
+  gp_query_client_(nh_.serviceClient<pigain::Query>("/gp_query_server")),
+  octomap_sub_(nh_.subscribe("octomap", 1, &nbvInspection::RrtGP::octomapCallback, this))
 {
-  manager_ = manager;
   kdTree_ = kd_create(3);
   iterationCount_ = 0;
-  for (int i = 0; i < 4; i++) {
-    inspectionThrottleTime_.push_back(ros::Time::now().toSec());
-  }
-
-  // If logging is required, set up files here
-  bool ifLog = false;
-  std::string ns = ros::this_node::getName();
-  ros::param::get(ns + "/nbvp/log/on", ifLog);
-  
+  ot_ = new octomap::OcTree(1);  // Create dummy OcTree to prevent crash due to ot_ tree not initialized
 }
 
 nbvInspection::RrtGP::~RrtGP()
 {
   delete rootNode_;
   kd_free(kdTree_);
-  if (fileResponse_.is_open()) {
-    fileResponse_.close();
-  }
-  if (fileTree_.is_open()) {
-    fileTree_.close();
-  }
-  if (filePath_.is_open()) {
-    filePath_.close();
-  }
 }
 
 void nbvInspection::RrtGP::setStateFromPoseMsg(
@@ -79,24 +62,12 @@ void nbvInspection::RrtGP::setStateFromPoseMsg(
   root_[1] = position.y();
   root_[2] = position.z();
   root_[3] = tf::getYaw(quat);
-
-  // Log the vehicle response in the planning frame
-  static double logThrottleTime = ros::Time::now().toSec();
-  if (ros::Time::now().toSec() - logThrottleTime > params_.log_throttle_) {
-    logThrottleTime += params_.log_throttle_;
-    if (params_.log_) {
-      for (int i = 0; i < root_.size() - 1; i++) {
-        fileResponse_ << root_[i] << ",";
-      }
-      fileResponse_ << root_[root_.size() - 1] << "\n";
-    }
-  }
 }
 
 void nbvInspection::RrtGP::iterate(int iterations)
 {
   ros::Time start_time = ros::Time::now();
-  ROS_INFO_STREAM("Starting iterate: " << ros::Time::now() - start_time);
+  // ROS_INFO_STREAM("Starting iterate: " << ros::Time::now() - start_time);
 // In this function a new configuration is sampled and added to the tree.
   StateVec newState;
 
@@ -108,7 +79,7 @@ void nbvInspection::RrtGP::iterate(int iterations)
       SQ(params_.minX_ - params_.maxX_) + SQ(params_.minY_ - params_.maxY_)
       + SQ(params_.minZ_ - params_.maxZ_));
 
-  ROS_INFO_STREAM("Sampling point... " << ros::Time::now() - start_time);
+  // ROS_INFO_STREAM("Sampling point... " << ros::Time::now() - start_time);
   bool solutionFound = false;
   while (!solutionFound) {
     for (int i = 0; i < 3; i++) {
@@ -135,8 +106,8 @@ void nbvInspection::RrtGP::iterate(int iterations)
     }
     solutionFound = true;
   }
-  ROS_INFO_STREAM("Found point... " << ros::Time::now() - start_time);
-  ROS_INFO_STREAM("Finding neighbour... " << ros::Time::now() - start_time);
+  // ROS_INFO_STREAM("Found point... " << ros::Time::now() - start_time);
+  // ROS_INFO_STREAM("Finding neighbour... " << ros::Time::now() - start_time);
 
 // Find nearest neighbour
   kdres * nearest = kd_nearest3(kdTree_, newState.x(), newState.y(), newState.z());
@@ -148,10 +119,10 @@ void nbvInspection::RrtGP::iterate(int iterations)
       nearest);
   kd_res_free(nearest);
 
-  ROS_INFO_STREAM("Found neighbour... " << ros::Time::now() - start_time);
-  ROS_INFO_STREAM("Collision checking... " << ros::Time::now() - start_time);
+  // ROS_INFO_STREAM("Found neighbour... " << ros::Time::now() - start_time);
+  // ROS_INFO_STREAM("Collision checking... " << ros::Time::now() - start_time);
 
-// Check for collision of new connection plus some overshoot distance.
+  // Check for collision of new connection plus some overshoot distance.
   Eigen::Vector3d origin(newParent->state_[0], newParent->state_[1], newParent->state_[2]);
   Eigen::Vector3d direction(newState[0] - origin[0], newState[1] - origin[1],
                             newState[2] - origin[2]);
@@ -161,46 +132,50 @@ void nbvInspection::RrtGP::iterate(int iterations)
   newState[0] = origin[0] + direction[0];
   newState[1] = origin[1] + direction[1];
   newState[2] = origin[2] + direction[2];
-  if (volumetric_mapping::OctomapManager::CellStatus::kFree
-      == manager_->getLineStatusBoundingBox(
-          origin, direction + origin + direction.normalized() * params_.dOvershoot_,
-          params_.boundingBox_)
-      && !multiagent::isInCollision(newParent->state_, newState, params_.boundingBox_, segments_)) {
 
-    ROS_INFO_STREAM("Collision check ok... " << ros::Time::now() - start_time);
-    ROS_INFO_STREAM("Calculating gain... " << ros::Time::now() - start_time);
-    // Sample the new orientation
-    // newState[3] = 2.0 * M_PI * (((double) rand()) / ((double) RAND_MAX) - 0.5);
-    std::pair<double, double> ret = gainCubature(newState);
-    newState[3] = ret.second; // Set angle to angle with highest information gain
+  octomap::point3d query(newState[0], newState[1], newState[2]);
+  octomap::OcTreeNode* result = ot_->search (query);
 
-    // Create new node and insert into tree
-    nbvInspection::Node<StateVec> * newNode = new nbvInspection::Node<StateVec>;
-    newNode->state_ = newState;
-    newNode->parent_ = newParent;
-    newNode->distance_ = newParent->distance_ + direction.norm();
-    newParent->children_.push_back(newNode);
-    newNode->gain_ = newParent->gain_
-        + ret.first * exp(-params_.degressiveCoeff_ * newNode->distance_);
+  if(result){
+    if(!collisionLine(origin, origin + direction, 0.5)) {
+      // ROS_INFO_STREAM("Collision check ok... " << ros::Time::now() - start_time);
+      // ROS_INFO_STREAM("Calculating gain... " << ros::Time::now() - start_time);
+      // Sample the new orientation
+      // newState[3] = 2.0 * M_PI * (((double) rand()) / ((double) RAND_MAX) - 0.5);
+      std::pair<double, double> ret = gainCubature(newState);
+      newState[3] = ret.second; // Set angle to angle with highest information gain
 
-    kd_insert3(kdTree_, newState.x(), newState.y(), newState.z(), newNode);
+      // Create new node and insert into tree
+      nbvInspection::Node<StateVec> * newNode = new nbvInspection::Node<StateVec>;
+      newNode->state_ = newState;
+      newNode->parent_ = newParent;
+      newNode->distance_ = newParent->distance_ + direction.norm();
+      newParent->children_.push_back(newNode);
+      newNode->gain_ = newParent->gain_
+          + ret.first * exp(-params_.degressiveCoeff_ * newNode->distance_);
 
-    ROS_INFO_STREAM("Calculated gain... " << ros::Time::now() - start_time);
+      kd_insert3(kdTree_, newState.x(), newState.y(), newState.z(), newNode);
 
-    // Display new node
-    publishNode(newNode);
+      // ROS_INFO_STREAM("Calculated gain... " << ros::Time::now() - start_time);
 
-    // Update best IG and node if applicable
-    if (newNode->gain_ > bestGain_) {
-      bestGain_ = newNode->gain_;
-      bestNode_ = newNode;
+      // Display new node
+      publishNode(newNode);
+
+      // Update best IG and node if applicable
+      if (newNode->gain_ > bestGain_) {
+        bestGain_ = newNode->gain_;
+        bestNode_ = newNode;
+      }
+      counter_++;
     }
-    counter_++;
+    else {
+      // ROS_INFO_STREAM("Collision check fail... " << ros::Time::now() - start_time);
+    }
   }
-  else {
-    ROS_INFO_STREAM("Collision check fail... " << ros::Time::now() - start_time);
+  else{
+    // ROS_INFO_STREAM("New pose in unknown area... " << ros::Time::now() - start_time);
   }
-  ROS_INFO_STREAM("Done! " << ros::Time::now() - start_time);
+  // ROS_INFO_STREAM("Done! " << ros::Time::now() - start_time);
 }
 
 void nbvInspection::RrtGP::initialize(int actions_taken)
@@ -249,13 +224,8 @@ void nbvInspection::RrtGP::initialize(int actions_taken)
     newState[0] = origin[0] + direction[0];
     newState[1] = origin[1] + direction[1];
     newState[2] = origin[2] + direction[2];
-    if (volumetric_mapping::OctomapManager::CellStatus::kFree
-        == manager_->getLineStatusBoundingBox(
-            origin, direction + origin + direction.normalized() * params_.dOvershoot_,
-            params_.boundingBox_)
-        && !multiagent::isInCollision(newParent->state_, newState, params_.boundingBox_,
-                                      segments_)) {
 
+    if(!collisionLine(origin, origin + direction, 0.5)) {
       std::pair<double, double> ret = gainCubature(newState);
       newState[3] = ret.second; // Set angle to angle with highest information gain
 
@@ -344,20 +314,20 @@ std::pair<double, double> nbvInspection::RrtGP::gainCubature(StateVec state)
   srv.request.point.y = state[1];
   srv.request.point.z = state[2];
 
-  ROS_INFO_STREAM("Calling gp_query_service");
+  // ROS_INFO_STREAM("Calling gp_query_service");
   if (gp_query_client_.call(srv)) {
-    ROS_INFO_STREAM("mu = " << srv.response.mu << " sigma = " << srv.response.sigma);
+    // ROS_INFO_STREAM("mu = " << srv.response.mu << " sigma = " << srv.response.sigma);
     if(srv.response.sigma < 0.2){
       gain = srv.response.mu;
       double yaw = 0;
       return std::make_pair(gain, yaw);
     }
     else{
-      ROS_WARN_STREAM("Sigma too high, calculating gain explicitly");
+      // ROS_WARN_STREAM("Sigma too high, calculating gain explicitly");
     }
   }
   else {
-    ROS_ERROR("Failed to call gp_query_service");
+    ROS_WARN("Failed to call gp_query_service");
   }
 
   // This function computes the gain
@@ -365,7 +335,7 @@ std::pair<double, double> nbvInspection::RrtGP::gainCubature(StateVec state)
   int n_rays = 1000;
   double fov_y = 56, fov_p = 42;
 
-  double dr = 0.2, dphi = 10, dtheta = 10;
+  double dr = 0.05, dphi = 10, dtheta = 10;
   double dphi_rad = M_PI*dphi/180.0f, dtheta_rad = M_PI*dtheta/180.0f;
   double r; int phi, theta;
   double phi_rad, theta_rad;
@@ -388,18 +358,16 @@ std::pair<double, double> nbvInspection::RrtGP::gainCubature(StateVec state)
         vec[2] = state[2] + r*cos(phi_rad);
         dir = vec - origin;
 
-        // Check cell status and add to the gain.
-        double probability;
-        volumetric_mapping::OctomapManager::CellStatus node = manager_->getCellProbabilityPoint(
-            vec, &probability);
-        if (node == volumetric_mapping::OctomapManager::CellStatus::kUnknown) {
+        octomap::point3d query(vec[0], vec[1], vec[2]);
+        octomap::OcTreeNode* result = ot_->search (query);
+        if (result) {
+          // Break if occupied so we don't count any information gain behind a wall.
+          if(result->getLogOdds() > 0)
+            break;
+        }
+        else {
           g += (2*r*r*dr + 1/6*dr*dr*dr) * dtheta_rad * sin(phi_rad) * sin(dphi_rad/2);
         }
-        else if (node == volumetric_mapping::OctomapManager::CellStatus::kOccupied) {
-          // Break if occupied so we don't count any information gain behind a wall.
-          break;
-        }
-
       }
 
       gain += g; 
@@ -459,7 +427,7 @@ std::pair<double, double> nbvInspection::RrtGP::gainCubature(StateVec state)
   }
 
   gain = best_yaw_score; 
-  ROS_INFO_STREAM("Gain is " << gain);
+  // ROS_INFO_STREAM("Gain is " << gain);
   publishGain(gain, origin);
 
   double yaw = M_PI*best_yaw/180.f;
@@ -553,17 +521,6 @@ void nbvInspection::RrtGP::publishNode(Node<StateVec> * node)
   p.lifetime = ros::Duration(10.0);
   p.frame_locked = false;
   params_.inspectionPath_.publish(p);
-
-  if (params_.log_) {
-    for (int i = 0; i < node->state_.size(); i++) {
-      fileTree_ << node->state_[i] << ",";
-    }
-    fileTree_ << node->gain_ << ",";
-    for (int i = 0; i < node->parent_->state_.size(); i++) {
-      fileTree_ << node->parent_->state_[i] << ",";
-    }
-    fileTree_ << node->parent_->gain_ << "\n";
-  }
 }
 
 void nbvInspection::RrtGP::publishGain(double gain, Eigen::Vector3d position){
@@ -573,6 +530,50 @@ void nbvInspection::RrtGP::publishGain(double gain, Eigen::Vector3d position){
   node.position.y = position[1];
   node.position.z = position[2];
   gain_pub_.publish(node);
+}
+
+void nbvInspection::RrtGP::octomapCallback(const octomap_msgs::Octomap& msg){
+  octomap::AbstractOcTree* aot = octomap_msgs::msgToMap(msg);
+  ot_ = (octomap::OcTree*)aot;
+}
+
+bool nbvInspection::RrtGP::collisionLine(Eigen::Vector3d p1, Eigen::Vector3d p2, double r){
+  octomap::point3d start(p1[0], p1[1], p1[2]);
+  octomap::point3d end(  p2[0], p2[1], p2[2]);
+  octomap::point3d min(std::min(p1[0], p2[0])-r, std::min(p1[1], p2[1])-r, std::min(p1[2], p2[2])-r);
+  octomap::point3d max(std::max(p1[0], p2[0])+r, std::max(p1[1], p2[1])+r, std::max(p1[2], p2[2])+r);
+  // ROS_WARN_STREAM( "start: (" << min.x() << ", " << min.y() << ", " << min.z() <<
+  //                  ") end: (" << max.x() << ", " << max.y() << ", " << max.z() << ")");
+  double lsq = (end-start).norm_sq();
+  double rsq = r*r;
+  for(octomap::OcTree::leaf_bbx_iterator it  = ot_->begin_leafs_bbx(min, max);
+                                         it != ot_->end_leafs_bbx(); ++it){
+
+    octomap::point3d pt(it.getX(), it.getY(), it.getZ());
+
+    if(it->getLogOdds() > 0 ){ // Node is occupied
+     /*  ROS_ERROR_STREAM( "p1: (" << p1.x() << ", " << p1.y() << ", " << p1.z() << ")" <<
+                       " p2: (" << p2.x() << ", " << p2.y() << ", " << p2.z() << ")" <<
+                       " pt: (" << pt.x() << ", " << pt.y() << ", " << pt.z() << ")" <<
+                       " lodds: " << it->getLogOdds() <<
+                       " codds: " << it->getMaxChildLogOdds());
+                       */
+      if(CylTest_CapsFirst(start, end, lsq, rsq, pt) > 0) return true;
+    }
+    /*
+    else{
+      ROS_WARN_STREAM( "p1: (" << p1.x() << ", " << p1.y() << ", " << p1.z() << ")" <<
+                      " p2: (" << p2.x() << ", " << p2.y() << ", " << p2.z() << ")" <<
+                      " pt: (" << pt.x() << ", " << pt.y() << ", " << pt.z() << ")" <<
+                      " lodds: " << it->getLogOdds() <<
+                      " codds: " << it->getMaxChildLogOdds());
+    }
+    */
+  }
+
+  // ROS_WARN_STREAM("No collision found");
+
+  return false;
 }
 
 geometry_msgs::Pose nbvInspection::RrtGP::stateVecToPose(StateVec stateVec, std::string targetFrame){
@@ -597,5 +598,85 @@ geometry_msgs::Pose nbvInspection::RrtGP::stateVecToPose(StateVec stateVec, std:
   tf::poseTFToMsg(poseTF, pose);
 
   return pose;
+}
+
+//-----------------------------------------------------------------------------
+// Name: CylTest_CapsFirst
+// Orig: Greg James - gjames@NVIDIA.com
+// Lisc: Free code - no warranty & no money back.  Use it all you want
+// Desc: 
+//    This function tests if the 3D point 'pt' lies within an arbitrarily
+// oriented cylinder.  The cylinder is defined by an axis from 'pt1' to 'pt2',
+// the axis having a length squared of 'lsq' (pre-compute for each cylinder
+// to avoid repeated work!), and radius squared of 'rsq'.
+//    The function tests against the end caps first, which is cheap -> only 
+// a single dot product to test against the parallel cylinder caps.  If the
+// point is within these, more work is done to find the distance of the point
+// from the cylinder axis.
+//    Fancy Math (TM) makes the whole test possible with only two dot-products
+// a subtract, and two multiplies.  For clarity, the 2nd mult is kept as a
+// divide.  It might be faster to change this to a mult by also passing in
+// 1/lengthsq and using that instead.
+//    Elminiate the first 3 subtracts by specifying the cylinder as a base
+// point on one end cap and a vector to the other end cap (pass in {dx,dy,dz}
+// instead of 'pt2' ).
+//
+//    The dot product is constant along a plane perpendicular to a vector.
+//    The magnitude of the cross product divided by one vector length is
+// constant along a cylinder surface defined by the other vector as axis.
+//
+// Return:  -1.0 if point is outside the cylinder
+// Return:  distance squared from cylinder axis if point is inside.
+//
+//-----------------------------------------------------------------------------
+float CylTest_CapsFirst( const octomap::point3d & pt1, 
+                         const octomap::point3d & pt2, float lsq, float rsq, const octomap::point3d & pt ) {
+	float dx, dy, dz;	    // vector d  from line segment point 1 to point 2
+	float pdx, pdy, pdz;	// vector pd from point 1 to test point
+	float dot, dsq;
+
+	dx = pt2.x() - pt1.x();	  // translate so pt1 is origin.  Make vector from
+	dy = pt2.y() - pt1.y();   // pt1 to pt2.  Need for this is easily eliminated
+	dz = pt2.z() - pt1.z();
+
+	pdx = pt.x() - pt1.x();		// vector from pt1 to test point.
+	pdy = pt.y() - pt1.y();
+	pdz = pt.z() - pt1.z();
+
+	// Dot the d and pd vectors to see if point lies behind the 
+	// cylinder cap at pt1.x, pt1.y, pt1.z
+
+	dot = pdx * dx + pdy * dy + pdz * dz;
+
+	// If dot is less than zero the point is behind the pt1 cap.
+	// If greater than the cylinder axis line segment length squared
+	// then the point is outside the other end cap at pt2.
+
+	if( dot < 0.0f || dot > lsq ) {
+		return( -1.0f );
+	}
+	else {
+		// Point lies within the parallel caps, so find
+		// distance squared from point to line, using the fact that sin^2 + cos^2 = 1
+		// the dot = cos() * |d||pd|, and cross*cross = sin^2 * |d|^2 * |pd|^2
+		// Carefull: '*' means mult for scalars and dotproduct for vectors
+		// In short, where dist is pt distance to cyl axis: 
+		// dist = sin( pd to d ) * |pd|
+		// distsq = dsq = (1 - cos^2( pd to d)) * |pd|^2
+		// dsq = ( 1 - (pd * d)^2 / (|pd|^2 * |d|^2) ) * |pd|^2
+		// dsq = pd * pd - dot * dot / lengthsq
+		//  where lengthsq is d*d or |d|^2 that is passed into this function 
+
+		// distance squared to the cylinder axis:
+
+		dsq = (pdx*pdx + pdy*pdy + pdz*pdz) - dot*dot/lsq;
+
+		if( dsq > rsq ) {
+			return( -1.0f );
+		}
+		else {
+			return( dsq );		// return distance squared to axis
+		}
+	}
 }
 #endif
