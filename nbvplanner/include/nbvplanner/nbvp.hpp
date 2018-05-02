@@ -37,9 +37,6 @@ nbvInspection::nbvPlanner<stateVec>::nbvPlanner(const ros::NodeHandle& nh,
       as_(nh_, "/nbvp", boost::bind(&nbvPlanner::execute, this, _1), false),
       position_pub_(nh_.advertise<geometry_msgs::Point>("/position", 1000))
 {
-
-  manager_ = new volumetric_mapping::OctomapManager(nh_, nh_private_);
-
   // Set up the topics and services
   params_.inspectionPath_ = nh_.advertise<visualization_msgs::Marker>("inspectionPath", 1000);
   posClient_ = nh_.subscribe("pose", 10, &nbvInspection::nbvPlanner<stateVec>::posCallback, this);
@@ -53,7 +50,7 @@ nbvInspection::nbvPlanner<stateVec>::nbvPlanner(const ros::NodeHandle& nh,
   }
 
   // Initialize the tree instance.
-  tree_ = new RrtGP(manager_, nh_);
+  tree_ = new RrtGP(nh_);
   tree_->setParams(params_);
   as_.start();
 
@@ -64,9 +61,6 @@ nbvInspection::nbvPlanner<stateVec>::nbvPlanner(const ros::NodeHandle& nh,
 template<typename stateVec>
 nbvInspection::nbvPlanner<stateVec>::~nbvPlanner()
 {
-  if (manager_) {
-    delete manager_;
-  }
 }
 
 template<typename stateVec>
@@ -90,14 +84,6 @@ void nbvInspection::nbvPlanner<stateVec>::execute(const nbvplanner::nbvpGoalCons
 
   if (!ready_) {
     ROS_ERROR_THROTTLE(1, "Planner not set up: Planner not ready!");
-    return;
-  }
-  if (manager_ == NULL) {
-    ROS_ERROR_THROTTLE(1, "Planner not set up: No octomap available!");
-    return;
-  }
-  if (manager_->getMapSize().norm() <= 0.0) {
-    ROS_ERROR_THROTTLE(1, "Planner not set up: Octomap is empty!");
     return;
   }
   result_.path.clear();

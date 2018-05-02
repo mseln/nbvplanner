@@ -23,9 +23,20 @@
 #include <eigen3/Eigen/Dense>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <nav_msgs/Odometry.h>
+
 #include <kdtree/kdtree.h>
 #include <nbvplanner/tree.h>
 #include <nbvplanner/Node.h>
+
+#include <octomap/octomap.h>
+// #include <octomap/OcTree.h>
+// #include <octomap_msgs/Octomap.h>
+#include <octomap_msgs/conversions.h>
+// #include <octomap_msgs/BoundingBoxQuery.h>
+
+
+// #include<octomap/OcTreeBase.h>
+
 
 #include <pigain/Node.h>
 #include <pigain/Query.h>
@@ -34,6 +45,10 @@
 #define SQ(x) ((x)*(x))
 #define SQRT2 0.70711
 
+
+float CylTest_CapsFirst( const octomap::point3d & pt1,
+                         const octomap::point3d & pt2, float lsq, float rsq, const octomap::point3d & pt );
+
 namespace nbvInspection {
 
 class RrtGP : public TreeBase<Eigen::Vector4d>
@@ -41,7 +56,7 @@ class RrtGP : public TreeBase<Eigen::Vector4d>
  public:
   typedef Eigen::Vector4d StateVec;
 
-  RrtGP(volumetric_mapping::OctomapManager * manager, const ros::NodeHandle& nh);
+  RrtGP(const ros::NodeHandle& nh);
   ~RrtGP();
   virtual void setStateFromPoseMsg(const geometry_msgs::PoseWithCovarianceStamped& pose);
   virtual void initialize(int actions_taken = 1);
@@ -51,11 +66,14 @@ class RrtGP : public TreeBase<Eigen::Vector4d>
   virtual void memorizeBestBranch();
   void publishNode(Node<StateVec> * node);
   void publishGain(double gain, Eigen::Vector3d position);
+  void octomapCallback(const octomap_msgs::Octomap& msg);
+  bool collisionLine(Eigen::Vector3d p1, Eigen::Vector3d p2, double r);
   std::pair<double, double> gainCubature(StateVec state);
   geometry_msgs::Pose stateVecToPose(StateVec stateVec, std::string targetFrame);
  protected:
   ros::NodeHandle nh_;
   kdtree * kdTree_;
+  octomap::OcTree * ot_;
   std::stack<StateVec> history_;
   std::vector<StateVec> bestBranchMemory_;
   int g_ID_;
@@ -66,6 +84,7 @@ class RrtGP : public TreeBase<Eigen::Vector4d>
   std::fstream fileResponse_;
   std::string logFilePath_;
   std::vector<double> inspectionThrottleTime_;
+  ros::Subscriber octomap_sub_;
   ros::Publisher gain_pub_; 
   ros::ServiceClient gp_query_client_;
 };
