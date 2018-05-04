@@ -402,6 +402,8 @@ std::pair<double, double> nbvInspection::RrtGP::gainCubature(StateVec state)
       a.color.a = 0.3;
       a.lifetime = ros::Duration(10.0);
       a.frame_locked = false;
+
+      // visualization_msgs::Marker a = createRayMarker(origin, dir, r, g, r_ID_++, params_.navigationFrame_);
       params_.inspectionPath_.publish(a);
 
 
@@ -541,36 +543,17 @@ bool nbvInspection::RrtGP::collisionLine(Eigen::Vector3d p1, Eigen::Vector3d p2,
   octomap::point3d end(  p2[0], p2[1], p2[2]);
   octomap::point3d min(std::min(p1[0], p2[0])-r, std::min(p1[1], p2[1])-r, std::min(p1[2], p2[2])-r);
   octomap::point3d max(std::max(p1[0], p2[0])+r, std::max(p1[1], p2[1])+r, std::max(p1[2], p2[2])+r);
-  // ROS_WARN_STREAM( "start: (" << min.x() << ", " << min.y() << ", " << min.z() <<
-  //                  ") end: (" << max.x() << ", " << max.y() << ", " << max.z() << ")");
   double lsq = (end-start).norm_sq();
   double rsq = r*r;
   for(octomap::OcTree::leaf_bbx_iterator it  = ot_->begin_leafs_bbx(min, max);
                                          it != ot_->end_leafs_bbx(); ++it){
-
     octomap::point3d pt(it.getX(), it.getY(), it.getZ());
 
     if(it->getLogOdds() > 0 ){ // Node is occupied
-     /*  ROS_ERROR_STREAM( "p1: (" << p1.x() << ", " << p1.y() << ", " << p1.z() << ")" <<
-                       " p2: (" << p2.x() << ", " << p2.y() << ", " << p2.z() << ")" <<
-                       " pt: (" << pt.x() << ", " << pt.y() << ", " << pt.z() << ")" <<
-                       " lodds: " << it->getLogOdds() <<
-                       " codds: " << it->getMaxChildLogOdds());
-                       */
       if(CylTest_CapsFirst(start, end, lsq, rsq, pt) > 0) return true;
+      if((end-pt).norm() < r) return true;
     }
-    /*
-    else{
-      ROS_WARN_STREAM( "p1: (" << p1.x() << ", " << p1.y() << ", " << p1.z() << ")" <<
-                      " p2: (" << p2.x() << ", " << p2.y() << ", " << p2.z() << ")" <<
-                      " pt: (" << pt.x() << ", " << pt.y() << ", " << pt.z() << ")" <<
-                      " lodds: " << it->getLogOdds() <<
-                      " codds: " << it->getMaxChildLogOdds());
-    }
-    */
   }
-
-  // ROS_WARN_STREAM("No collision found");
 
   return false;
 }

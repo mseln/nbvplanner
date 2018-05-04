@@ -27,17 +27,11 @@
 
 #include <kdtree/kdtree.h>
 #include <nbvplanner/tree.h>
+#include <nbvplanner/rrtviz.h>
 #include <nbvplanner/Node.h>
 
 #include <octomap/octomap.h>
-// #include <octomap/OcTree.h>
-// #include <octomap_msgs/Octomap.h>
 #include <octomap_msgs/conversions.h>
-// #include <octomap_msgs/BoundingBoxQuery.h>
-
-
-// #include<octomap/OcTreeBase.h>
-
 
 #include <pigain/Node.h>
 #include <pigain/Query.h>
@@ -80,10 +74,6 @@ class RrtGP : public TreeBase<Eigen::Vector4d>
   int g_ID_;
   int r_ID_; // Unique id for rays
   int iterationCount_;
-  std::fstream fileTree_;
-  std::fstream filePath_;
-  std::fstream fileResponse_;
-  std::string logFilePath_;
   std::vector<double> inspectionThrottleTime_;
   ros::Subscriber octomap_sub_;
   ros::Publisher gain_pub_; 
