@@ -24,9 +24,7 @@
 #include <geometry_msgs/Point.h>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <nav_msgs/Odometry.h>
-#include <multiagent_collision_check/Segment.h>
 #include <nbvplanner/nbvp_srv.h>
-#include <nbvplanner/mesh_structure.h>
 #include <nbvplanner/tree.hpp>
 #include <nbvplanner/rrtgp.h>
 

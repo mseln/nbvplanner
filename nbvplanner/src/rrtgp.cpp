@@ -18,7 +18,6 @@
 #define RRTGP_HPP_
 
 #include <cstdlib>
-#include <multiagent_collision_check/multiagent_collision_checker.h>
 #include <nbvplanner/rrtgp.h>
 #include <nbvplanner/tree.hpp>
 

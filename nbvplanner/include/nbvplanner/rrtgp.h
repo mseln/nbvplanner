@@ -22,6 +22,7 @@
 #include <sstream>
 #include <eigen3/Eigen/Dense>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
+#include <visualization_msgs/Marker.h>
 #include <nav_msgs/Odometry.h>
 
 #include <kdtree/kdtree.h>

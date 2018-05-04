@@ -8,10 +8,8 @@ find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   visualization_msgs
   message_generation
-  octomap_world
   tf
   kdtree
-  multiagent_collision_check
 
   genmsg 
   actionlib_msgs 
@@ -21,6 +19,7 @@ find_package(catkin REQUIRED COMPONENTS
 find_package(cmake_modules REQUIRED)
 find_package(Eigen REQUIRED)
 find_package(octomap REQUIRED)
+
 add_message_files(
   DIRECTORY msg 
   FILES Node.msg
@@ -49,7 +48,7 @@ generate_messages(
 catkin_package(
   INCLUDE_DIRS include ${Eigen_INCLUDE_DIRS} ${OCTOMAP_INCLUDE_DIRS} ${catkin_INCLUDE_DIRS}
   LIBRARIES nbvplanner ${catkin_LIBRARIES} ${OCTOMAP_LIBRARIES}
-  CATKIN_DEPENDS message_runtime roscpp geometry_msgs visualization_msgs octomap_world tf kdtree
+  CATKIN_DEPENDS message_runtime roscpp geometry_msgs visualization_msgs tf kdtree
 )
 
 include_directories(
@@ -59,7 +58,7 @@ include_directories(
   ${OCTOMAP_INCLUDE_DIRS}
 )
 
-add_library(nbvplanner src/mesh_structure.cpp src/nbvp.cpp src/rrt.cpp src/rrtgp.cpp src/tree.cpp)
+add_library(nbvplanner src/nbvp.cpp src/rrtgp.cpp src/tree.cpp)
 target_link_libraries(nbvplanner
   ${catkin_LIBRARIES}
   ${OCTOMAP_LIBRARIES}
@@ -70,7 +69,7 @@ add_dependencies(nbvplanner
   nbvplanner_generate_messages_cpp
 )
 
-add_executable(nbvPlanner src/nbv_planner_node.cpp src/mesh_structure.cpp src/nbvp.cpp src/rrt.cpp src/rrtgp.cpp src/tree.cpp)
+add_executable(nbvPlanner src/nbv_planner_node.cpp src/nbvp.cpp src/rrtgp.cpp src/tree.cpp)
 target_link_libraries(nbvPlanner
   ${catkin_LIBRARIES}
   ${OCTOMAP_LIBRARIES}
@@ -79,6 +78,5 @@ add_dependencies(nbvPlanner
   ${catkin_EXPORTED_TARGETS} 
   ${${PROJECT_NAME}_EXPORTED_TARGETS} 
   nbvplanner_generate_messages_cpp
-
 )
 
