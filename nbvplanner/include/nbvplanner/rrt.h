@@ -51,7 +51,6 @@ class RrtTree : public TreeBase<Eigen::Vector4d>
   virtual void memorizeBestBranch();
   void publishNode(Node<StateVec> * node);
   double gain(StateVec state);
-  double gainRay(StateVec state);
   std::vector<geometry_msgs::Pose> samplePath(StateVec start, StateVec end,
                                               std::string targetFrame);
  protected:

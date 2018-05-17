@@ -351,10 +351,8 @@ void nbvInspection::RrtTree::iterate(int iterations)
     newNode->parent_ = newParent;
     newNode->distance_ = newParent->distance_ + direction.norm();
     newParent->children_.push_back(newNode);
-    // newNode->gain_ = newParent->gain_
-    //    + gainRay(newNode->state_) * exp(-params_.degressiveCoeff_ * newNode->distance_);
-
-    newNode->gain_ = gainRay(newNode->state_) * exp(-params_.degressiveCoeff_ * newNode->distance_);
+    newNode->gain_ = newParent->gain_
+        + gain(newNode->state_) * exp(-params_.degressiveCoeff_ * newNode->distance_);
 
     kd_insert3(kdTree_, newState.x(), newState.y(), newState.z(), newNode);
 
@@ -449,7 +447,7 @@ void nbvInspection::RrtTree::initialize()
       newNode->distance_ = newParent->distance_ + direction.norm();
       newParent->children_.push_back(newNode);
       newNode->gain_ = newParent->gain_
-          + gainRay(newNode->state_) * exp(-params_.degressiveCoeff_ * newNode->distance_);
+          + gain(newNode->state_) * exp(-params_.degressiveCoeff_ * newNode->distance_);
 
       kd_insert3(kdTree_, newState.x(), newState.y(), newState.z(), newNode);
 
@@ -599,93 +597,6 @@ double nbvInspection::RrtTree::gain(StateVec state)
   }
   return gain;
 }
-
-double nbvInspection::RrtTree::gainRay(StateVec state)
-{
-  // This function computes the gain
-  // TODO Parameterize
-  int n_rays = 1000;
-  double fov_y = 90, fov_p = 60;
-
-  double gain = 0.0;
-  double p, y; // Pitch, yaw
-
-  const double disc = manager_->getResolution();
-  Eigen::Vector3d origin(state[0], state[1], state[2]);
-  Eigen::Vector3d vec;
-
-  // for(int i = 0; i < n_rays; ++i){ 
-  int id=0;
-  for(double yi = -45; yi < 45; yi+=10){
-    for(double pi = -30; pi < 30; pi+=10){
-      y = M_PI*yi/180 + state[3];
-      p = M_PI*pi/180;
-      // y = (((double) rand()) / ((double) RAND_MAX) - 0.5) * M_PI*fov_y/180.0 + state[3];
-      // p = (((double) rand()) / ((double) RAND_MAX) - 0.5) * M_PI*fov_p/180.0;
-      ROS_ERROR_STREAM(y << " " << state[3]);
-      Eigen::Vector3d dir;
-      float r;
-      for(r = 0; r < params_.gainRange_; r+=0.1){
-        vec[0] = state[0] + r*cos(y)*cos(p);
-        vec[1] = state[1] + r*sin(y)*cos(p);
-        vec[2] = state[2] + r*sin(p);
-        dir = vec - origin;
-
-
-        // Check cell status and add to the gain.
-        double probability;
-        volumetric_mapping::OctomapManager::CellStatus node = manager_->getCellProbabilityPoint(
-            vec, &probability);
-        if (node == volumetric_mapping::OctomapManager::CellStatus::kUnknown) {
-          gain += params_.igUnmapped_;
-        }
-        else if (node == volumetric_mapping::OctomapManager::CellStatus::kOccupied) {
-          // Break if occupied so we don't count any information gain behind a wall.
-          break;
-        }
-
-      }
-      
-      visualization_msgs::Marker p;
-      p.header.stamp = ros::Time::now();
-      p.header.seq = id;
-      p.header.frame_id = params_.navigationFrame_;
-      p.id = id; id++;
-      p.ns = "rays";
-      p.type = visualization_msgs::Marker::ARROW;
-      p.action = visualization_msgs::Marker::ADD;
-      p.pose.position.x = state[0];
-      p.pose.position.y = state[1];
-      p.pose.position.z = state[2];
-
-      Eigen::Quaternion<double> q;
-      q.setFromTwoVectors(origin, dir);
-      q.normalize();
-      p.pose.orientation.x = q.x();
-      p.pose.orientation.y = q.y();
-      p.pose.orientation.z = q.z();
-      p.pose.orientation.w = q.w();
-
-      p.scale.x = r;
-      p.scale.y = 0.01;
-      p.scale.z = 0.01;
-      p.color.r = 255.0;
-      p.color.g = 127.0 / 255.0;
-      p.color.b = 0.0;
-      p.color.a = 1.0;
-      p.lifetime = ros::Duration(10.0);
-      p.frame_locked = false;
-      params_.inspectionPath_.publish(p);
-
-
-    }
-  }
-
-  // Scale with volume
-  gain *= pow(disc, 3.0);
-  return gain;
-}
-
 
 std::vector<geometry_msgs::Pose> nbvInspection::RrtTree::getPathBackToPrevious(
     std::string targetFrame)
