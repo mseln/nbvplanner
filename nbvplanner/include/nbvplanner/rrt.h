@@ -59,7 +59,6 @@ class RrtTree : public TreeBase<Eigen::Vector4d>
   std::stack<StateVec> history_;
   std::vector<StateVec> bestBranchMemory_;
   int g_ID_;
-  int r_ID_; // Unique id for rays
   int iterationCount_;
   std::fstream fileTree_;
   std::fstream filePath_;
