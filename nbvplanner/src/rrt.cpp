@@ -292,6 +292,7 @@ void nbvInspection::RrtTree::iterate(int iterations)
       SQ(params_.minX_ - params_.maxX_) + SQ(params_.minY_ - params_.maxY_)
       + SQ(params_.minZ_ - params_.maxZ_));
   bool solutionFound = false;
+  ros::Time s = ros::Time::now();
   while (!solutionFound) {
     for (int i = 0; i < 3; i++) {
       newState[i] = 2.0 * radius * (((double) rand()) / ((double) RAND_MAX) - 0.5);
@@ -317,6 +318,8 @@ void nbvInspection::RrtTree::iterate(int iterations)
     }
     solutionFound = true;
   }
+  ros::Time e = ros::Time::now();
+  sampling_time_ += e - s;
 
 // Find nearest neighbour
   kdres * nearest = kd_nearest3(kdTree_, newState.x(), newState.y(), newState.z());
@@ -338,11 +341,17 @@ void nbvInspection::RrtTree::iterate(int iterations)
   newState[0] = origin[0] + direction[0];
   newState[1] = origin[1] + direction[1];
   newState[2] = origin[2] + direction[2];
-  if (volumetric_mapping::OctomapManager::CellStatus::kFree
-      == manager_->getLineStatusBoundingBox(
-          origin, direction + origin + direction.normalized() * params_.dOvershoot_,
-          params_.boundingBox_)
-      && !multiagent::isInCollision(newParent->state_, newState, params_.boundingBox_, segments_)) {
+
+
+
+  s = ros::Time::now();
+  volumetric_mapping::OctomapManager::CellStatus status = manager_->getLineStatusBoundingBox(
+          origin + 0.1*direction.normalized(), direction + origin + direction.normalized() * params_.dOvershoot_, params_.boundingBox_);
+  bool multiagent_collision = multiagent::isInCollision(newParent->state_, newState, params_.boundingBox_, segments_);
+  e = ros::Time::now();
+  collision_check_time_ += e - s;
+
+  if (volumetric_mapping::OctomapManager::CellStatus::kFree == status && !multiagent_collision ) {
     // Sample the new orientation
     newState[3] = 2.0 * M_PI * (((double) rand()) / ((double) RAND_MAX) - 0.5);
     // Create new node and insert into tree
@@ -372,6 +381,9 @@ void nbvInspection::RrtTree::initialize()
 {
 // This function is to initialize the tree, including insertion of remainder of previous best branch.
   g_ID_ = 0;
+  sampling_time_ = ros::Duration(0);
+  gain_time_ = ros::Duration(0);
+  collision_check_time_ = ros::Duration(0);
 // Remove last segment from segment list (multi agent only)
   int i;
   for (i = 0; i < agentNames_.size(); i++) {
@@ -434,12 +446,16 @@ void nbvInspection::RrtTree::initialize()
     newState[0] = origin[0] + direction[0];
     newState[1] = origin[1] + direction[1];
     newState[2] = origin[2] + direction[2];
-    if (volumetric_mapping::OctomapManager::CellStatus::kFree
-        == manager_->getLineStatusBoundingBox(
-            origin, direction + origin + direction.normalized() * params_.dOvershoot_,
-            params_.boundingBox_)
-        && !multiagent::isInCollision(newParent->state_, newState, params_.boundingBox_,
-                                      segments_)) {
+
+
+    ros::Time s = ros::Time::now();
+    volumetric_mapping::OctomapManager::CellStatus status = manager_->getLineStatusBoundingBox(
+            origin + 0.1*direction.normalized(), direction + origin + direction.normalized() * params_.dOvershoot_, params_.boundingBox_);
+    bool multiagent_collision = multiagent::isInCollision(newParent->state_, newState, params_.boundingBox_, segments_);
+    ros::Time e = ros::Time::now();
+    collision_check_time_ += e - s;
+
+    if (volumetric_mapping::OctomapManager::CellStatus::kFree == status && !multiagent_collision ) {
       // Create new node and insert into tree
       nbvInspection::Node<StateVec> * newNode = new nbvInspection::Node<StateVec>;
       newNode->state_ = newState;
@@ -511,6 +527,7 @@ std::vector<geometry_msgs::Pose> nbvInspection::RrtTree::getBestEdge(std::string
 
 double nbvInspection::RrtTree::gain(StateVec state)
 {
+  ros::Time s = ros::Time::now();
 // This function computes the gain
   double gain = 0.0;
   const double disc = manager_->getResolution();
@@ -595,6 +612,9 @@ double nbvInspection::RrtTree::gain(StateVec state)
     transform.setRotation(quaternion);
     gain += params_.igArea_ * mesh_->computeInspectableArea(transform);
   }
+
+  ros::Time e = ros::Time::now();
+  gain_time_ += e - s;
   return gain;
 }
 

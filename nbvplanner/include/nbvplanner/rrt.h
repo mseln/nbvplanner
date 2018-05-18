@@ -53,6 +53,7 @@ class RrtTree : public TreeBase<Eigen::Vector4d>
   double gain(StateVec state);
   std::vector<geometry_msgs::Pose> samplePath(StateVec start, StateVec end,
                                               std::string targetFrame);
+
  protected:
   kdtree * kdTree_;
   std::stack<StateVec> history_;
@@ -64,6 +65,7 @@ class RrtTree : public TreeBase<Eigen::Vector4d>
   std::fstream fileResponse_;
   std::string logFilePath_;
   std::vector<double> inspectionThrottleTime_;
+
 };
 }
 
