@@ -364,6 +364,7 @@ void nbvInspection::RrtTree::iterate(int iterations)
         + gain(newNode->state_) * exp(-params_.degressiveCoeff_ * newNode->distance_);
 
     kd_insert3(kdTree_, newState.x(), newState.y(), newState.z(), newNode);
+    tree_size_++;
 
     // Display new node
     publishNode(newNode);
@@ -384,6 +385,7 @@ void nbvInspection::RrtTree::initialize()
   sampling_time_ = ros::Duration(0);
   gain_time_ = ros::Duration(0);
   collision_check_time_ = ros::Duration(0);
+  tree_size_ = 0;
 // Remove last segment from segment list (multi agent only)
   int i;
   for (i = 0; i < agentNames_.size(); i++) {
@@ -466,6 +468,7 @@ void nbvInspection::RrtTree::initialize()
           + gain(newNode->state_) * exp(-params_.degressiveCoeff_ * newNode->distance_);
 
       kd_insert3(kdTree_, newState.x(), newState.y(), newState.z(), newNode);
+      tree_size_++;
 
       // Display new node
       publishNode(newNode);

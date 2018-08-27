@@ -104,6 +104,7 @@ class TreeBase
   ros::Duration sampling_time_;
   ros::Duration gain_time_;
   ros::Duration collision_check_time_;
+  int tree_size_;
  public:
   TreeBase();
   TreeBase(mesh::StlMesh * mesh, volumetric_mapping::OctomapManager * manager);
@@ -129,6 +130,8 @@ class TreeBase
   ros::Duration getSamplingTime(){ return sampling_time_; }
   ros::Duration getGainTime(){ return gain_time_; }
   ros::Duration getCollisionCheckTime(){ return collision_check_time_; }
+  int           getTreeSize(){ return tree_size_; }
+
 
 };
 }

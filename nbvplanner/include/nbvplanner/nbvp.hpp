@@ -269,6 +269,7 @@ void nbvInspection::nbvPlanner<stateVec>::execute(const nbvplanner::nbvpGoalCons
   result_.sampling_time.data = tree_->getSamplingTime();
   result_.gain_time.data = tree_->getGainTime();
   result_.collision_check_time.data = tree_->getCollisionCheckTime();
+  result_.tree_size = tree_->getTreeSize();
 
   tree_->memorizeBestBranch();
   // Publish path to block for other agents (multi agent only).

@@ -6,5 +6,6 @@ geometry_msgs/Pose[] path
 std_msgs/Duration sampling_time
 std_msgs/Duration gain_time
 std_msgs/Duration collision_check_time
+int32 tree_size
 -------
 # Define a feedback message
