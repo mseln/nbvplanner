@@ -51,6 +51,7 @@ class RrtTree : public TreeBase<Eigen::Vector4d>
   virtual void memorizeBestBranch();
   void publishNode(Node<StateVec> * node);
   double gain(StateVec state);
+  double gainCubature(StateVec state);
   std::vector<geometry_msgs::Pose> samplePath(StateVec start, StateVec end,
                                               std::string targetFrame);
 
@@ -59,6 +60,7 @@ class RrtTree : public TreeBase<Eigen::Vector4d>
   std::stack<StateVec> history_;
   std::vector<StateVec> bestBranchMemory_;
   int g_ID_;
+  int id_;
   int iterationCount_;
   std::fstream fileTree_;
   std::fstream filePath_;
@@ -67,6 +69,7 @@ class RrtTree : public TreeBase<Eigen::Vector4d>
   std::vector<double> inspectionThrottleTime_;
 
 };
+visualization_msgs::Marker createRayMarker(Eigen::Vector3d pos, Eigen::Vector3d dir, double r, double gain, int id, std::string frame_id);
 }
 
 #endif

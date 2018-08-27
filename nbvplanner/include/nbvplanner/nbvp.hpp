@@ -477,10 +477,10 @@ void nbvInspection::nbvPlanner<stateVec>::insertPointcloudWithTf(
     const sensor_msgs::PointCloud2::ConstPtr& pointcloud)
 {
   static double last = ros::Time::now().toSec();
-  if (last + params_.pcl_throttle_ < ros::Time::now().toSec()) {
+  // if (last + params_.pcl_throttle_ < ros::Time::now().toSec()) {
     tree_->insertPointcloudWithTf(pointcloud);
     last += params_.pcl_throttle_;
-  }
+  // }
 }
 
 template<typename stateVec>

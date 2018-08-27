@@ -17,7 +17,7 @@
     <arg name="log_file" value="$(arg log_file)" />
     <arg name="tf_frame" value="navigation" />
     <arg name="pcl_topic" value="/$(arg mav_name)/vi_sensor/camera_depth/depth/points" />
-    <arg name="resolution" value="0.4" />
+    <arg name="resolution" value="0.1" />
     <arg name="visualize_max_z" value="2.5" />
     <arg name="sensor_max_range" value="5.0" />
   </include>

@@ -12,7 +12,7 @@
   <arg name="pcl_topic" default="/pointcloudOut" />
   <arg name="stl_file_path" default="" />
   <arg name="mesh_resolution" default="1.0" />
-  <arg name="resolution" default="0.4" />
+  <arg name="resolution" default="0.1" />
   <arg name="visualize_max_z" default="999" />
   <arg name="sensor_max_range" default="5.0" />
   <arg name="peer_vehicle_pose_topic_1" default="peer_pose_1" />

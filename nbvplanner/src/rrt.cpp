@@ -345,8 +345,10 @@ void nbvInspection::RrtTree::iterate(int iterations)
 
 
   s = ros::Time::now();
-  volumetric_mapping::OctomapManager::CellStatus status = manager_->getLineStatusBoundingBox(
-          origin + 0.1*direction.normalized(), direction + origin + direction.normalized() * params_.dOvershoot_, params_.boundingBox_);
+  // volumetric_mapping::OctomapManager::CellStatus status = manager_->getLineStatusBoundingBox(
+  //        origin + 0.1*direction.normalized(), direction + origin + direction.normalized() * params_.dOvershoot_, params_.boundingBox_);
+
+  volumetric_mapping::OctomapManager::CellStatus status = manager_->collisionLine(origin, origin + direction + direction.normalized()*params_.dOvershoot_, 0.75);
   bool multiagent_collision = multiagent::isInCollision(newParent->state_, newState, params_.boundingBox_, segments_);
   e = ros::Time::now();
   collision_check_time_ += e - s;
@@ -361,7 +363,7 @@ void nbvInspection::RrtTree::iterate(int iterations)
     newNode->distance_ = newParent->distance_ + direction.norm();
     newParent->children_.push_back(newNode);
     newNode->gain_ = newParent->gain_
-        + gain(newNode->state_) * exp(-params_.degressiveCoeff_ * newNode->distance_);
+        + gainCubature(newNode->state_) * exp(-params_.degressiveCoeff_ * newNode->distance_);
 
     kd_insert3(kdTree_, newState.x(), newState.y(), newState.z(), newNode);
     tree_size_++;
@@ -382,6 +384,7 @@ void nbvInspection::RrtTree::initialize()
 {
 // This function is to initialize the tree, including insertion of remainder of previous best branch.
   g_ID_ = 0;
+  id_ = 0;
   sampling_time_ = ros::Duration(0);
   gain_time_ = ros::Duration(0);
   collision_check_time_ = ros::Duration(0);
@@ -451,8 +454,10 @@ void nbvInspection::RrtTree::initialize()
 
 
     ros::Time s = ros::Time::now();
-    volumetric_mapping::OctomapManager::CellStatus status = manager_->getLineStatusBoundingBox(
-            origin + 0.1*direction.normalized(), direction + origin + direction.normalized() * params_.dOvershoot_, params_.boundingBox_);
+    // volumetric_mapping::OctomapManager::CellStatus status = manager_->getLineStatusBoundingBox(
+    //        origin + 0.1*direction.normalized(), direction + origin + direction.normalized() * params_.dOvershoot_, params_.boundingBox_);
+
+    volumetric_mapping::OctomapManager::CellStatus status = manager_->collisionLine(origin, origin + direction + direction.normalized()*params_.dOvershoot_, 0.75);
     bool multiagent_collision = multiagent::isInCollision(newParent->state_, newState, params_.boundingBox_, segments_);
     ros::Time e = ros::Time::now();
     collision_check_time_ += e - s;
@@ -465,7 +470,7 @@ void nbvInspection::RrtTree::initialize()
       newNode->distance_ = newParent->distance_ + direction.norm();
       newParent->children_.push_back(newNode);
       newNode->gain_ = newParent->gain_
-          + gain(newNode->state_) * exp(-params_.degressiveCoeff_ * newNode->distance_);
+          + gainCubature(newNode->state_) * exp(-params_.degressiveCoeff_ * newNode->distance_);
 
       kd_insert3(kdTree_, newState.x(), newState.y(), newState.z(), newNode);
       tree_size_++;
@@ -620,6 +625,60 @@ double nbvInspection::RrtTree::gain(StateVec state)
   gain_time_ += e - s;
   return gain;
 }
+
+double nbvInspection::RrtTree::gainCubature(StateVec state) {
+  ros::Time start = ros::Time::now();
+  double gain = 0.0;
+
+  // This function computes the gain
+  double fov_h = 56.0; 
+  double fov_p = 42.0;
+  double fov_r = 4;
+
+  double dr = 0.1, dphi = 10, dtheta = 10;
+  double dphi_rad = M_PI*dphi/180.0f, dtheta_rad = M_PI*dtheta/180.0f;
+  double r; int phi, theta;
+  double phi_rad, theta_rad;
+  
+  double yaw = state[3] / M_PI * 180;
+
+  Eigen::Vector3d origin(state[0], state[1], state[2]);
+  Eigen::Vector3d vec, dir;
+
+  for(theta = yaw - fov_h/2; theta < yaw + fov_h/2; theta += dtheta){
+    theta_rad = M_PI*theta/180.0f;
+    for(phi = 90 - fov_p/2; phi < 90 + fov_p/2; phi += dphi){
+      phi_rad = M_PI*phi/180.0f;
+
+      for(r = 0; r < fov_r; r+=dr){
+        vec[0] = state[0] + r*cos(theta_rad)*sin(phi_rad);
+        vec[1] = state[1] + r*sin(theta_rad)*sin(phi_rad);
+        vec[2] = state[2] + r*cos(phi_rad);
+        dir = vec - origin;
+
+        double probability;
+        volumetric_mapping::OctomapManager::CellStatus node = manager_->getCellProbabilityPoint(vec, &probability);
+
+        if (node == volumetric_mapping::OctomapManager::CellStatus::kOccupied) {
+          // Break if occupied so we don't count any information gain behind a wall.
+          break;
+        }
+        else if (node == volumetric_mapping::OctomapManager::CellStatus::kUnknown) {
+          gain += (2*r*r*dr + 1/6*dr*dr*dr) * dtheta_rad * sin(phi_rad) * sin(dphi_rad/2);
+        }
+      }
+      
+      visualization_msgs::Marker a = createRayMarker(origin, dir, r, gain, id_++, params_.navigationFrame_);
+      params_.inspectionPath_.publish(a);
+    }
+  }
+
+  ros::Time end = ros::Time::now();
+  gain_time_ += end - start;
+  return gain;
+}
+
+
 
 std::vector<geometry_msgs::Pose> nbvInspection::RrtTree::getPathBackToPrevious(
     std::string targetFrame)
@@ -779,5 +838,41 @@ std::vector<geometry_msgs::Pose> nbvInspection::RrtTree::samplePath(StateVec sta
   }
   return ret;
 }
+
+visualization_msgs::Marker nbvInspection::createRayMarker(Eigen::Vector3d pos, Eigen::Vector3d dir, double r, double gain, int id, std::string frame_id){
+    visualization_msgs::Marker a;
+    a.header.stamp = ros::Time::now();
+    a.header.seq = id;
+    a.header.frame_id = frame_id;
+    a.id = id;
+    a.ns = "rays";
+    a.type = visualization_msgs::Marker::ARROW;
+    a.action = visualization_msgs::Marker::ADD;
+    a.pose.position.x = pos[0];
+    a.pose.position.y = pos[1];
+    a.pose.position.z = pos[2];
+
+    Eigen::Vector3d o(1,0,0);
+    Eigen::Quaternion<double> q;
+    q.setFromTwoVectors(o, dir);
+    q.normalize();
+    a.pose.orientation.x = q.x();
+    a.pose.orientation.y = q.y();
+    a.pose.orientation.z = q.z();
+    a.pose.orientation.w = q.w();
+
+    a.scale.x = r;
+    a.scale.y = 0.01;
+    a.scale.z = 0.01;
+    a.color.r = gain * 8;
+    a.color.g = 127.0 / 255.0;
+    a.color.b = 0.0;
+    a.color.a = 0.3;
+    a.lifetime = ros::Duration(10.0);
+    a.frame_locked = false;
+
+    return a;
+}
+
 
 #endif
