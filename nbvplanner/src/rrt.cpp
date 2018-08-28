@@ -348,7 +348,7 @@ void nbvInspection::RrtTree::iterate(int iterations)
   // volumetric_mapping::OctomapManager::CellStatus status = manager_->getLineStatusBoundingBox(
   //        origin + 0.1*direction.normalized(), direction + origin + direction.normalized() * params_.dOvershoot_, params_.boundingBox_);
 
-  volumetric_mapping::OctomapManager::CellStatus status = manager_->collisionLine(origin, origin + direction + direction.normalized()*params_.dOvershoot_, 0.75);
+  volumetric_mapping::OctomapManager::CellStatus status = manager_->collisionLine(origin, origin + direction + direction.normalized()*params_.dOvershoot_, 0.6);
   bool multiagent_collision = multiagent::isInCollision(newParent->state_, newState, params_.boundingBox_, segments_);
   e = ros::Time::now();
   collision_check_time_ += e - s;
@@ -457,7 +457,7 @@ void nbvInspection::RrtTree::initialize()
     // volumetric_mapping::OctomapManager::CellStatus status = manager_->getLineStatusBoundingBox(
     //        origin + 0.1*direction.normalized(), direction + origin + direction.normalized() * params_.dOvershoot_, params_.boundingBox_);
 
-    volumetric_mapping::OctomapManager::CellStatus status = manager_->collisionLine(origin, origin + direction + direction.normalized()*params_.dOvershoot_, 0.75);
+    volumetric_mapping::OctomapManager::CellStatus status = manager_->collisionLine(origin, origin + direction + direction.normalized()*params_.dOvershoot_, 0.6);
     bool multiagent_collision = multiagent::isInCollision(newParent->state_, newState, params_.boundingBox_, segments_);
     ros::Time e = ros::Time::now();
     collision_check_time_ += e - s;
@@ -635,12 +635,13 @@ double nbvInspection::RrtTree::gainCubature(StateVec state) {
   double fov_p = 42.0;
   double fov_r = 4;
 
-  double dr = 0.1, dphi = 10, dtheta = 10;
+  double dr = 0.4, dphi = 10, dtheta = 10;
   double dphi_rad = M_PI*dphi/180.0f, dtheta_rad = M_PI*dtheta/180.0f;
   double r; int phi, theta;
   double phi_rad, theta_rad;
   
   double yaw = state[3] / M_PI * 180;
+  double g_ray;
 
   Eigen::Vector3d origin(state[0], state[1], state[2]);
   Eigen::Vector3d vec, dir;
@@ -649,6 +650,7 @@ double nbvInspection::RrtTree::gainCubature(StateVec state) {
     theta_rad = M_PI*theta/180.0f;
     for(phi = 90 - fov_p/2; phi < 90 + fov_p/2; phi += dphi){
       phi_rad = M_PI*phi/180.0f;
+      g_ray = 0;
 
       for(r = 0; r < fov_r; r+=dr){
         vec[0] = state[0] + r*cos(theta_rad)*sin(phi_rad);
@@ -664,11 +666,12 @@ double nbvInspection::RrtTree::gainCubature(StateVec state) {
           break;
         }
         else if (node == volumetric_mapping::OctomapManager::CellStatus::kUnknown) {
-          gain += (2*r*r*dr + 1/6*dr*dr*dr) * dtheta_rad * sin(phi_rad) * sin(dphi_rad/2);
+          g_ray += (2*r*r*dr + 1/6*dr*dr*dr) * dtheta_rad * sin(phi_rad) * sin(dphi_rad/2);
         }
       }
-      
-      visualization_msgs::Marker a = createRayMarker(origin, dir, r, gain, id_++, params_.navigationFrame_);
+
+      gain += g_ray;
+      visualization_msgs::Marker a = createRayMarker(origin, dir, r, g_ray, id_++, params_.navigationFrame_);
       params_.inspectionPath_.publish(a);
     }
   }
@@ -708,7 +711,7 @@ void nbvInspection::RrtTree::clear()
   rootNode_ = NULL;
 
   counter_ = 0;
-  bestGain_ = params_.zero_gain_;
+  bestGain_ = 0;
   bestNode_ = NULL;
 
   kd_free(kdTree_);
