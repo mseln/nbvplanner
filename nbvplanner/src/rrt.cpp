@@ -348,7 +348,7 @@ void nbvInspection::RrtTree::iterate(int iterations)
   // volumetric_mapping::OctomapManager::CellStatus status = manager_->getLineStatusBoundingBox(
   //        origin + 0.1*direction.normalized(), direction + origin + direction.normalized() * params_.dOvershoot_, params_.boundingBox_);
 
-  volumetric_mapping::OctomapManager::CellStatus status = manager_->collisionLine(origin, origin + direction + direction.normalized()*params_.dOvershoot_, 0.75);
+  volumetric_mapping::OctomapManager::CellStatus status = manager_->collisionLine(origin, origin + direction + direction.normalized()*params_.dOvershoot_, 0.6);
   bool multiagent_collision = multiagent::isInCollision(newParent->state_, newState, params_.boundingBox_, segments_);
   e = ros::Time::now();
   collision_check_time_ += e - s;
@@ -457,7 +457,7 @@ void nbvInspection::RrtTree::initialize()
     // volumetric_mapping::OctomapManager::CellStatus status = manager_->getLineStatusBoundingBox(
     //        origin + 0.1*direction.normalized(), direction + origin + direction.normalized() * params_.dOvershoot_, params_.boundingBox_);
 
-    volumetric_mapping::OctomapManager::CellStatus status = manager_->collisionLine(origin, origin + direction + direction.normalized()*params_.dOvershoot_, 0.75);
+    volumetric_mapping::OctomapManager::CellStatus status = manager_->collisionLine(origin, origin + direction + direction.normalized()*params_.dOvershoot_, 0.6);
     bool multiagent_collision = multiagent::isInCollision(newParent->state_, newState, params_.boundingBox_, segments_);
     ros::Time e = ros::Time::now();
     collision_check_time_ += e - s;
