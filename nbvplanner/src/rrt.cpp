@@ -363,7 +363,7 @@ void nbvInspection::RrtTree::iterate(int iterations)
     newNode->distance_ = newParent->distance_ + direction.norm();
     newParent->children_.push_back(newNode);
     newNode->gain_ = newParent->gain_
-        + gainCubature(newNode->state_) * exp(-params_.degressiveCoeff_ * newNode->distance_);
+        + gain(newNode->state_) * exp(-params_.degressiveCoeff_ * newNode->distance_);
 
     kd_insert3(kdTree_, newState.x(), newState.y(), newState.z(), newNode);
     tree_size_++;
@@ -470,7 +470,7 @@ void nbvInspection::RrtTree::initialize()
       newNode->distance_ = newParent->distance_ + direction.norm();
       newParent->children_.push_back(newNode);
       newNode->gain_ = newParent->gain_
-          + gainCubature(newNode->state_) * exp(-params_.degressiveCoeff_ * newNode->distance_);
+          + gain(newNode->state_) * exp(-params_.degressiveCoeff_ * newNode->distance_);
 
       kd_insert3(kdTree_, newState.x(), newState.y(), newState.z(), newNode);
       tree_size_++;
