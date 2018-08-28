@@ -412,7 +412,7 @@ void nbvInspection::RrtTree::initialize()
 
   rootNode_ = new Node<StateVec>;
   rootNode_->distance_ = 0.0;
-  rootNode_->gain_ = params_.zero_gain_;
+  rootNode_->gain_ = 0.0;
   rootNode_->parent_ = NULL;
 
   if (params_.exact_root_) {

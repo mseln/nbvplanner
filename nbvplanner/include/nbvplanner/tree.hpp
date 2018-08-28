@@ -40,7 +40,7 @@ nbvInspection::Node<stateVec>::~Node()
 template<typename stateVec>
 nbvInspection::TreeBase<stateVec>::TreeBase()
 {
-  bestGain_ = params_.zero_gain_;
+  bestGain_ = 0;
   bestNode_ = NULL;
   counter_ = 0;
   rootNode_ = NULL;
@@ -52,7 +52,7 @@ nbvInspection::TreeBase<stateVec>::TreeBase(mesh::StlMesh * mesh,
 {
   mesh_ = mesh;
   manager_ = manager;
-  bestGain_ = params_.zero_gain_;
+  bestGain_ = 0;
   bestNode_ = NULL;
   counter_ = 0;
   rootNode_ = NULL;
